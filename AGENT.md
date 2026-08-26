@@ -1,51 +1,86 @@
+Aqui está o `AGENT.md` completo e atualizado, incorporando todos os requisitos do barema e os pilares de design e elegância:
+
+```markdown
 # SAFIRA — Agente de Desenvolvimento (Compiladores 2026.2)
 
-Você é o assistente técnico especializado no desenvolvimento do **Safira**, um analisador léxico, sintático e semântico simplificado para código C, implementado em **Ruby puro**[cite: 1].
+Você é o assistente técnico especializado no desenvolvimento do **Safira**, um compilador/analisador léxico, sintático e semântico simplificado para código C, implementado em **Ruby puro**.
+
+O diferencial central do **Safira** é ser um compilador **elegante, idiomático e com apresentação visual de alto padrão no terminal (CLI UI)**, unindo rigor acadêmico com excelência de software design.
 
 ---
 
 ## 🎯 Objetivo Principal & Regra Eliminatória
-O programa deve ser executado via linha de comando a partir de `compiler.rb`, recebendo o caminho de um arquivo `.c` como argumento[cite: 1]:
+
+O programa deve ser executado a partir de `compiler.rb`, recebendo como argumento o caminho de um arquivo de código-fonte (`.c` ou `.java`):
 ```bash
 ruby compiler.rb caminho/arquivo.c
+
 ```
 
-Ele deve processar o código-fonte de forma determinística e amigável, apresentando com clareza as quatro etapas avaliadas no barema[cite: 1]:
-1. **Análise Léxica:** Lista ordenada de tokens com seus lexemas/tipos e a Tabela de Símbolos completa (com identificadores, palavras reservadas, tipos e ordem de inserção)[cite: 1].
-2. **Análise Sintática:** Validação da estrutura gramatical e impressão visual da Árvore Sintática Abstrata (AST) resultante[cite: 1].
-3. **Análise Semântica:** Validação de inconsistências semânticas com mensagens de erro formatadas contendo linha e causa[cite: 1].
-4. **Defesa / Legibilidade:** Código modular, comentado e intuitivo para a apresentação funcional de 5 minutos[cite: 1].
+Ele deve processar o código de forma determinística, dividindo a execução e a visualização nas quatro etapas do barema:
 
-> ⚠️ **CRITÉRIO ELIMINATÓRIO (NOTA ZERO):** Falhas de execução não tratadas (*unhandled exceptions* / tracebacks do Ruby), incapacidade de ler o arquivo de entrada ou ausência de exibição dos elementos do barema resultam em nota zero imediata[cite: 1].
+1. **Análise Léxica:** Emissão da lista ordenada de tokens e construção visual da Tabela de Símbolos completa (identificadores, palavras reservadas, tipos inferidos/declarados e ordem cronológica de inserção).
+2. **Análise Sintática:** Validação gramatical via analisador descendente recursivo (*Recursive Descent Parser*) e renderização visual da Árvore Sintática Abstrata (AST) com caracteres Unicode hierárquicos.
+3. **Análise Semântica:** Validação das **duas opções do barema** (Compatibilidade de Tipos e Variável Não Declarada) com diagnósticos contextuais no estilo *Clang/Rust*.
+4. **Defesa / Arquitetura:** Código limpo, idiomático, desacoplado e pronto para a explicação funcional da equipe durante os 5 minutos de apresentação.
+
+> ⚠️ **CRITÉRIO ELIMINATÓRIO (NOTA ZERO):** Falhas não tratadas (*unhandled exceptions* / tracebacks do Ruby), falha na leitura do arquivo ou ausência de exibição clara dos elementos do barema resultam em nota 0,0.
+
+---
+
+## 💎 Pilares de Elegância do Safira
+
+Para garantir um projeto diferenciado, a implementação deve seguir estes três pilares:
+
+### 1. Visual CLI & Experiência de Terminal de Alto Padrão
+
+* **Tabelas ASCII Estilizadas:** A Tabela de Símbolos e os Tokens devem ser impressos com bordas refinadas (`+---+` ou caracteres Unicode de caixa) e alinhamento tipográfico uniforme.
+* **Árvore Sintática (AST) Gráfica em Unicode:** Em vez de JSON ou listas planas, desenhar a hierarquia em árvore usando ramificações legíveis (`├──`, `└──`, `│   `).
+* **Diagnósticos com Apontamento de Linha e Coluna:** Mensagens de erro semântico e sintático devem exibir o trecho de código afetado com um cursor/seta indicativa (`^^^^^^`), facilitando a compreensão visual imediata.
+* **Paleta de Cores ANSI Discreta:** Uso consciente de cores no terminal (ex.: tons de verde para validações bem-sucedidas, amarelo para tokens/nós e vermelho para erros contextuais).
+
+### 2. Ruby Moderno e Idiomático
+
+* **Estruturas de Dados Limpas:** Uso de `Data.define` ou `Struct` imutáveis para `Token`, `SymbolEntry` e nós da AST (`VarDeclNode`, `AssignNode`, `BinaryOpNode`, etc.).
+* **Pattern Matching (`case ... in`):** Priorizar casamento de padrões para inspecionar nós da AST no analisador semântico e no renderizador da árvore, mantendo o código conciso e legível.
+* **Separação Rígida de Camadas:** As classes `Lexer`, `Parser` e `SemanticAnalyzer` não devem realizar `puts` internamente. Elas apenas processam dados e retornam estruturas/erros; a formatação visual e orquestração ficam a cargo exclusivo de `compiler.rb` ou de módulos renderizadores dedicados.
+
+### 3. Modos de Execução e Demonstração
+
+* O `compiler.rb` deve suportar a execução completa por padrão, mas aceitar flags opcionais (ex.: `--tokens`, `--symbols`, `--ast`, `--semantic`) para facilitar a demonstração isolada de cada etapa caso a banca examinadora solicite.
 
 ---
 
 ## 📁 Estrutura de Arquivos do Projeto
 
-Mantenha toda a implementação estritamente dentro da estrutura de arquivos existente:
+Toda a implementação deve respeitar estritamente a estrutura existente no repositório:
 
 ```text
 Safira/
 ├── src/
-│   ├── lexer.rb        # Tokenização, emissão de tokens e construção da Tabela de Símbolos
-│   ├── parser.rb       # Recursive Descent Parser, definição dos nós e geração da AST
-│   └── semantic.rb     # Validação semântica (verificação de tipos e escopo/declaração)
-├── compiler.rb         # Ponto de entrada CLI (orquestra leitura do arquivo, etapas e saídas)
+│   ├── lexer.rb        # Tokenização, regex rules, controle de linha/coluna e Tabela de Símbolos
+│   ├── parser.rb       # Recursive Descent Parser, nós da AST e checagem de GLC
+│   └── semantic.rb     # Análise semântica (Opção 1: Tipos | Opção 2: Declaração/Escopo)
+├── samples/            # Arquivos .c de exemplo para os testes e a apresentação
+│   ├── valid.c         # Fluxo perfeito com declaração e expressões aritméticas
+│   ├── err_type.c      # Demonstração de incompatibilidade de tipos
+│   └── err_scope.c     # Demonstração de variável não declarada
+├── compiler.rb         # Ponto de entrada CLI, orquestração e renderizador visual
 ├── .gitignore
 ├── CODEOWNERS
 ├── Gemfile
 ├── Gemfile.lock
 ├── README.md
 └── AGENT.md
+
 ```
 
 ---
 
-## 📋 Escopo Gramatical e Semântico Estrito
+## 📋 Escopo Gramatical e Semântico
 
-Para manter a clareza didática na defesa de 5 minutos e garantir funcionamento robusto, concentre-se estritamente na gramática simplificada solicitada[cite: 1]:
+### 1. Gramática Livre de Contexto (BNF Alvo)
 
-### 1. Gramática Livre de Contexto (BNF Alvo)[cite: 1]
 ```bnf
 <Programa>       ::= (<Declaracao> | <Atribuicao>)*
 <Declaracao>     ::= <Tipo> <identificador> ("=" <Expressao>)? ";"
@@ -53,62 +88,83 @@ Para manter a clareza didática na defesa de 5 minutos e garantir funcionamento 
 <Atribuicao>     ::= <identificador> "=" <Expressao> ";"
 <Expressao>      ::= <Termo> (("+" | "-" | "*" | "/") <Termo>)*
 <Termo>          ::= <identificador> | <numero> | <string_literal>
+
 ```
 
-### 2. Validações Semânticas Obrigatórias[cite: 1]
-* **Checagem de Variável Não Declarada:** Consultar a Tabela de Símbolos antes de permitir o uso de qualquer identificador em expressões ou atribuições[cite: 1].
-  * *Formato:* `[ERRO SEMÂNTICO] Linha X: Variável '<identificador>' utilizada sem declaração prévia.`[cite: 1]
-* **Compatibilidade de Tipos:** Validar se o tipo do valor atribuído é compatível com o tipo declarado na Tabela de Símbolos[cite: 1].
-  * *Formato:* `[ERRO SEMÂNTICO] Linha X: Incompatibilidade de tipos. Não é possível atribuir <TipoB> a '<identificador>' do tipo <TipoA>.`[cite: 1]
+### 2. Validações Semânticas (Ambas as opções implementadas)
+
+* **Opção 1: Checagem de Compatibilidade de Tipos:**
+* O sistema deve inferir o tipo da expressão à direita da atribuição e validar a compatibilidade com o tipo declarado na Tabela de Símbolos.
+
+
+* **Opção 2: Checagem de Variável Não Declarada:**
+* Toda variável usada em atribuições ou expressões deve ser previamente validada contra a Tabela de Símbolos.
+
+
 
 ---
 
-## 🖥️ Formato Obrigatório de Saída no Terminal
+## 🖥️ Layout Padrão de Saída no Terminal
 
-A saída de `compiler.rb` deve ser limpa, estruturada e dividida nas seções correspondentes ao barema[cite: 1]:
+A saída de `compiler.rb` deve manter uma identidade visual uniforme, limpa e bem delimitada:
 
 ```text
-==================================================
-1. ANÁLISE LÉXICA: LISTA DE TOKENS
-==================================================
-[Linha 1, Col 1]  TIPO: TIPO_DADO     | LEXEMA: 'int'
-[Linha 1, Col 5]  TIPO: IDENTIFICADOR | LEXEMA: 'x'
-[Linha 1, Col 7]  TIPO: OP_ATRIB      | LEXEMA: '='
-[Linha 1, Col 9]  TIPO: NUMERO        | LEXEMA: '5'
-[Linha 1, Col 10] TIPO: PONTO_VIRGULA | LEXEMA: ';'
+================================================================================
+  SAFIRA COMPILER — Análise de Código C
+  Arquivo: samples/valid.c
+================================================================================
 
-==================================================
-2. TABELA DE SÍMBOLOS
-==================================================
-+---------------+---------+--------+---------------+
-| Identificador | Tipo    | Linha  | Ordem Inserção|
-+---------------+---------+--------+---------------+
-| x             | int     | 1      | 1             |
-+---------------+---------+--------+---------------+
+[1] ANÁLISE LÉXICA: LISTA DE TOKENS
+--------------------------------------------------------------------------------
+ [Linha  1, Col  1]  TIPO: TIPO_DADO        | LEXEMA: 'int'
+ [Linha  1, Col  5]  TIPO: IDENTIFICADOR    | LEXEMA: 'x'
+ [Linha  1, Col  7]  TIPO: OP_ATRIB         | LEXEMA: '='
+ [Linha  1, Col  9]  TIPO: NUMERO           | LEXEMA: '5'
+ [Linha  1, Col 10]  TIPO: PONTO_VIRGULA    | LEXEMA: ';'
 
-==================================================
-3. ANÁLISE SINTÁTICA: ÁRVORE SINTÁTICA (AST)
-==================================================
-Atribuicao
-├── ID (x)
-├── OP_ATRIB (=)
-└── Expressao (+)
-    ├── ID (a)
-    └── NUM (5)
+[2] TABELA DE SÍMBOLOS
+--------------------------------------------------------------------------------
+ +---------------+---------+--------+---------------+
+ | Identificador | Tipo    | Linha  | Ordem Inserção|
+ +---------------+---------+--------+---------------+
+ | x             | int     | 1      | 1             |
+ | total         | float   | 2      | 2             |
+ +---------------+---------+--------+---------------+
 
-==================================================
-4. ANÁLISE SEMÂNTICA
-==================================================
-✔ Nenhuma inconsistência semântica encontrada.
-(OU caso ocorra erro:)
-✖ [ERRO SEMÂNTICO] Linha 2: Variável 'total' utilizada sem declaração prévia.
+[3] ANÁLISE SINTÁTICA: ÁRVORE SINTÁTICA (AST)
+--------------------------------------------------------------------------------
+ Atribuicao
+ ├── ID (x)
+ ├── OP_ATRIB (=)
+ └── Expressao (+)
+     ├── ID (a)
+     └── NUM (5)
+
+[4] ANÁLISE SEMÂNTICA
+--------------------------------------------------------------------------------
+ ✔ Nenhuma inconsistência semântica encontrada.
+
+ (OU em caso de erro semântico / diagnóstico elegante:)
+ ✖ [ERRO SEMÂNTICO] Incompatibilidade de tipos na linha 3:
+     3 | int resultado = "texto";
+       |                 ^^^^^^^ Não é possível atribuir String a 'resultado' (int).
+
+ ✖ [ERRO SEMÂNTICO] Variável não declarada na linha 5:
+     5 | total = 10;
+       | ^^^^^ Variável 'total' utilizada sem declaração prévia.
+================================================================================
+
 ```
 
 ---
 
-## 🚫 Diretrizes Críticas de Implementação (O Que NÃO Fazer)
+## 🚫 Diretrizes Críticas de Implementação
 
-* ❌ **NÃO** use geradores automáticos de parser como Racc, Lex, Bison ou ANTLR. Todo o analisador léxico e sintático deve ser construído manualmente em Ruby puro para possibilitar a explicação detalhada de cada etapa na defesa[cite: 1].
-* ❌ **NÃO** ignore posições de linha e coluna nos tokens, pois elas são essenciais para apontar erros com precisão[cite: 1].
-* ❌ **NÃO** permita que exceções do Ruby interrompam o programa abruptamente (`rescue` nos pontos críticos e imprima saídas amigáveis)[cite: 1].
-* ❌ **NÃO** adicione dependências de gems externas no fluxo central de execução do compilador.
+* ❌ **NÃO** utilize geradores automáticos de código (Racc, Lex, Bison, ANTLR). Todo o pipeline deve ser escrito em Ruby puro.
+* ❌ **NÃO** dependa de gems externas para formatação ou parsing. Garanta portabilidade total para execução em qualquer ambiente padrão com Ruby.
+* ❌ **NÃO** deixe chamadas de I/O (`puts`, `print`) dispersas dentro do core do compilador (`lexer.rb`, `parser.rb`, `semantic.rb`).
+* ❌ **NÃO** permita que exceções quebrem a execução abruptamente com tracebacks. Capture erros e exiba diagnósticos elegantes.
+
+```
+
+```
