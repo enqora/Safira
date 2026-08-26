@@ -1,5 +1,3 @@
-Aqui está o `AGENT.md` completo e atualizado, incorporando todos os requisitos do barema e os pilares de design e elegância:
-
 ```markdown
 # SAFIRA — Agente de Desenvolvimento (Compiladores 2026.2)
 
