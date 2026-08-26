@@ -21,8 +21,8 @@ puts "#{BLUE}================================================================#{R
 puts "#{BLUE}  SAFIRA — Testes Unitários do Lexer (src/lexer.rb)              #{RESET}"
 puts "#{BLUE}================================================================#{RESET}\n"
 
-# Teste 1: Declarações e Tipos Primitivos
-puts "#{YELLOW}[1] Teste de Declaração de Variáveis e Tipos Primitivos#{RESET}"
+# Teste 1: Declarações e Identificadores na Tabela de Símbolos
+puts "#{YELLOW}[1] Teste de Declaração de Variáveis e Tabela de Símbolos#{RESET}"
 code1 = <<~C
   int idade = 25;
   float salario = 1250.75;
@@ -38,15 +38,16 @@ assert(lexer1.valid?, 'Nenhum erro léxico deve ocorrer no Teste 1')
 assert(tokens1.size == 20, "Total de tokens deve ser 20 (obtido: #{tokens1.size})")
 assert(symbols1.size == 4, "Total de símbolos deve ser 4 (obtido: #{symbols1.size})")
 assert(symbols1.map(&:name) == %w[idade salario genero precisao], 'Identificadores cadastrados corretamente')
-assert(symbols1.map(&:type) == %w[int float char double], 'Tipos cadastrados corretamente na tabela de símbolos')
+assert(symbols1.all? { |s| s.type.nil? }, 'Tipos na tabela de símbolos são mantidos nil pelo Lexer (delegados à semântica)')
 assert(symbols1.map(&:order) == [1, 2, 3, 4], 'Ordem cronológica incremental correta')
 
-# Teste 2: Reatribuição, Expressões e Não-duplicação na Tabela de Símbolos
-puts "\n#{YELLOW}[2] Teste de Expressões e Não-duplicação de Símbolos#{RESET}"
+# Teste 2: Múltiplas Variáveis e Reatribuição (sem duplicação)
+puts "\n#{YELLOW}[2] Teste de Múltiplas Variáveis e Não-duplicação de Símbolos#{RESET}"
 code2 = <<~C
-  int x = 10;
-  x = x + 5 * 2;
-  total = x / 2;
+  int a, b;
+  a = 10;
+  b = a + 5 * 2;
+  total = a / 2;
 C
 
 lexer2 = Lexer.new(code2)
@@ -54,28 +55,33 @@ tokens2 = lexer2.tokenize
 symbols2 = lexer2.symbols
 
 assert(lexer2.valid?, 'Nenhum erro léxico deve ocorrer no Teste 2')
-assert(symbols2.size == 2, 'Não deve haver símbolos duplicados')
-assert(symbols2[0].name == 'x' && symbols2[0].type == 'int', 'Símbolo x mantém tipo declarado')
-assert(symbols2[1].name == 'total' && symbols2[1].type.nil?, 'Símbolo total sem declaração tem tipo nil')
-assert(symbols2[1].order == 2, 'Ordem do símbolo total é 2')
+assert(symbols2.size == 3, "Total de símbolos deve ser 3 (a, b, total) (obtido: #{symbols2.size})")
+assert(symbols2.map(&:name) == %w[a b total], 'Símbolos a, b e total registrados na ordem')
+assert(symbols2.map(&:order) == [1, 2, 3], 'Ordem cronológica correta')
 
-# Teste 3: Comentários e Precisão de Linha / Coluna
-puts "\n#{YELLOW}[3] Teste de Comentários e Rastreamento de Linha/Coluna#{RESET}"
+# Teste 3: Comentários de Bloco e Linha (Fluxo e Rastreamento de Posição)
+puts "\n#{YELLOW}[3] Teste de Comentários de Bloco e Linha#{RESET}"
 code3 = <<~C
-  // Comentario de linha inicial
+  /* Comentario de bloco no inicio */
+  // Comentario de linha
   int x = 5; /* Comentario
   de bloco */ float y = 10.0;
+  /* Bloco final */
 C
 
 lexer3 = Lexer.new(code3)
 tokens3 = lexer3.tokenize
 
-assert(lexer3.valid?, 'Comentários não geram erro léxico nem tokens espúrios')
+assert(lexer3.valid?, 'Comentários não geram erro léxico nem tokens fantasmas')
+token_int = tokens3.find { |t| t.type == :TIPO_DADO && t.lexeme == 'int' }
 token_x = tokens3.find { |t| t.lexeme == 'x' }
+token_float = tokens3.find { |t| t.type == :TIPO_DADO && t.lexeme == 'float' }
 token_y = tokens3.find { |t| t.lexeme == 'y' }
 
-assert(token_x.line == 2 && token_x.column == 5, "Posição de x deve ser [2, 5] (obtido: [#{token_x.line}, #{token_x.column}])")
-assert(token_y.line == 3 && token_y.column == 19, "Posição de y após comentário multilinhas deve ser precisa [3, 19] (obtido: [#{token_y.line}, #{token_y.column}])")
+assert(token_int.line == 3 && token_int.column == 1, "Posição de 'int' após comentários deve ser [3, 1] (obtido: [#{token_int.line}, #{token_int.column}])")
+assert(token_x.line == 3 && token_x.column == 5, "Posição de 'x' deve ser [3, 5] (obtido: [#{token_x.line}, #{token_x.column}])")
+assert(token_float.line == 4 && token_float.column == 13, "Posição de 'float' imediatamente após '*/' deve ser [4, 13] (obtido: [#{token_float.line}, #{token_float.column}])")
+assert(token_y.line == 4 && token_y.column == 19, "Posição de 'y' deve ser [4, 19] (obtido: [#{token_y.line}, #{token_y.column}])")
 
 # Teste 4: Captura de Caracteres Desconhecidos e Erros sem Exceção
 puts "\n#{YELLOW}[4] Teste de Tratamento de Erros Léxicos Sem Travar#{RESET}"

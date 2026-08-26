@@ -74,7 +74,6 @@ class Lexer
     @line = 1
     @column = 1
     @pos = 0
-    @last_type_seen = nil
     @tokenized = false
   end
 
@@ -137,15 +136,12 @@ class Lexer
 
   private
 
-  # Registra ou atualiza um símbolo na Tabela de Símbolos
-  def register_symbol(name, type, line)
-    existing = @symbols.find { |s| s.name == name }
-    if existing
-      existing.type ||= type if type
-    else
-      order = @symbols.size + 1
-      @symbols << SymbolEntry.new(name, type, line, order)
-    end
+  # Registra um símbolo na Tabela de Símbolos (sem tipo inferido pelo lexer)
+  def register_symbol(name, line)
+    return if @symbols.any? { |s| s.name == name }
+
+    order = @symbols.size + 1
+    @symbols << SymbolEntry.new(name, nil, line, order)
   end
 
   def handle_newlines_and_spaces
@@ -175,11 +171,11 @@ class Lexer
   def handle_comments
     return false unless @source[@pos] == '/' && @pos + 1 < @source.length
 
-    next_char = @source[@pos + 1]
-    if next_char == '/'
+    case @source[@pos + 1]
+    when '/'
       skip_line_comment
       true
-    elsif next_char == '*'
+    when '*'
       skip_block_comment
       true
     else
@@ -201,24 +197,21 @@ class Lexer
     start_col = @column
     @pos += 2
     @column += 2
-    closed = consume_block_comment_body
+    closed = false
 
-    return if closed
-
-    @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*')
-  end
-
-  def consume_block_comment_body
     while @pos < @source.length
       if @source[@pos] == '*' && @pos + 1 < @source.length && @source[@pos + 1] == '/'
         @pos += 2
         @column += 2
-        return true
+        closed = true
+        break
       end
 
       advance_comment_char
     end
-    false
+
+    @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*') unless closed
+    true
   end
 
   def advance_comment_char
@@ -248,7 +241,6 @@ class Lexer
     if closed
       full_lexeme = @source[start_pos...@pos]
       @tokens << Token.new(:LITERAL_STRING, full_lexeme, start_line, start_col)
-      @last_type_seen = nil
     else
       @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, char)
     end
@@ -283,7 +275,6 @@ class Lexer
     @tokens << Token.new(:NUMERO, lexeme, @line, @column)
     @column += lexeme.length
     @pos += lexeme.length
-    @last_type_seen = nil
     true
   end
 
@@ -297,11 +288,9 @@ class Lexer
 
     if KEYWORDS.key?(lexeme)
       @tokens << Token.new(:TIPO_DADO, lexeme, start_line, start_col)
-      @last_type_seen = lexeme
     else
       @tokens << Token.new(:IDENTIFICADOR, lexeme, start_line, start_col)
-      register_symbol(lexeme, @last_type_seen, start_line)
-      @last_type_seen = nil
+      register_symbol(lexeme, start_line)
     end
 
     @column += lexeme.length
@@ -315,7 +304,6 @@ class Lexer
 
     type = SINGLE_CHAR_TOKENS[char]
     @tokens << Token.new(type, char, @line, @column)
-    @last_type_seen = nil if char == ';'
     @column += 1
     @pos += 1
     true
