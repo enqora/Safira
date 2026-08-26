@@ -3,14 +3,26 @@
 # Estrutura representativa de um Token
 Token = Struct.new(:type, :lexeme, :line, :column) do
   def to_s
-    format('[Linha %2d, Col %2d]  TIPO: %-16s | LEXEMA: %p', line, column, type, lexeme)
+    format(
+      '[Linha %<line>2d, Col %<col>2d]  TIPO: %<type>-16s | LEXEMA: %<lexeme>p',
+      line: line,
+      col: column,
+      type: type.to_s,
+      lexeme: lexeme
+    )
   end
 end
 
 # Estrutura representativa de uma entrada na Tabela de Símbolos
 SymbolEntry = Struct.new(:name, :type, :line, :order) do
   def to_s
-    format('%d. %s (%s) [Linha %d]', order, name, type || 'indefinido', line)
+    format(
+      '%<order>d. %<name>s (%<type>s) [Linha %<line>d]',
+      order: order,
+      name: name,
+      type: type || 'indefinido',
+      line: line
+    )
   end
 end
 
@@ -23,7 +35,7 @@ end
 
 # Analisador Léxico (Lexer) do Safira em Ruby puro
 class Lexer
-  attr_reader :source, :tokens, :symbols, :errors
+  attr_reader :source
 
   # Palavras-chave / Tipos primitivos suportados
   KEYWORDS = {
@@ -49,10 +61,10 @@ class Lexer
   }.freeze
 
   # Regex para identificadores (padrão C: inicia com letra ou _ seguido de alfanuméricos ou _)
-  IDENTIFIER_REGEX = /\G([a-zA-Z_][a-zA-Z0-9_]*)/
+  IDENTIFIER_REGEX = /\G([a-zA-Z_][a-zA-Z0-9_]*)/.freeze
 
   # Regex para números (decimais/float com prioridade sobre inteiros)
-  NUMBER_REGEX = /\G(\d+\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+|\d+)/
+  NUMBER_REGEX = /\G(\d+\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+|\d+)/.freeze
 
   def initialize(source)
     @source = source.to_s
@@ -62,6 +74,7 @@ class Lexer
     @line = 1
     @column = 1
     @pos = 0
+    @last_type_seen = nil
     @tokenized = false
   end
 
@@ -69,162 +82,15 @@ class Lexer
   def tokenize
     return @tokens if @tokenized
 
-    last_type_seen = nil
-
     while @pos < @source.length
-      char = @source[@pos]
+      next if handle_newlines_and_spaces
+      next if handle_comments
+      next if handle_string_literals
+      next if handle_numbers
+      next if handle_identifiers_and_keywords
+      next if handle_operators_and_delimiters
 
-      # 1. Quebras de linha (\n, \r\n, \r)
-      if char == "\n"
-        @line += 1
-        @column = 1
-        @pos += 1
-        next
-      elsif char == "\r"
-        @pos += (@pos + 1 < @source.length && @source[@pos + 1] == "\n" ? 2 : 1)
-        @line += 1
-        @column = 1
-        next
-      end
-
-      # 2. Espaços em branco e tabulações
-      if char == ' ' || char == "\t"
-        @column += 1
-        @pos += 1
-        next
-      end
-
-      # 3. Comentários (linha '//' e bloco '/* ... */')
-      if char == '/' && @pos + 1 < @source.length
-        next_char = @source[@pos + 1]
-
-        if next_char == '/'
-          # Comentário de linha única
-          @pos += 2
-          @column += 2
-          while @pos < @source.length && @source[@pos] != "\n" && @source[@pos] != "\r"
-            @pos += 1
-            @column += 1
-          end
-          next
-        elsif next_char == '*'
-          # Comentário de bloco
-          start_line = @line
-          start_col = @column
-          @pos += 2
-          @column += 2
-          closed = false
-
-          while @pos < @source.length
-            if @source[@pos] == '*' && @pos + 1 < @source.length && @source[@pos + 1] == '/'
-              @pos += 2
-              @column += 2
-              closed = true
-              break
-            elsif @source[@pos] == "\n"
-              @line += 1
-              @column = 1
-              @pos += 1
-            elsif @source[@pos] == "\r"
-              @pos += (@pos + 1 < @source.length && @source[@pos + 1] == "\n" ? 2 : 1)
-              @line += 1
-              @column = 1
-            else
-              @column += 1
-              @pos += 1
-            end
-          end
-
-          unless closed
-            @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*')
-          end
-          next
-        end
-      end
-
-      # 4. Literais de String e Caractere ("..." e '...')
-      if char == '"' || char == "'"
-        quote_char = char
-        start_line = @line
-        start_col = @column
-        start_pos = @pos
-        @pos += 1
-        @column += 1
-        closed = false
-
-        while @pos < @source.length
-          curr = @source[@pos]
-          if curr == '\\' && @pos + 1 < @source.length
-            @pos += 2
-            @column += 2
-          elsif curr == quote_char
-            @pos += 1
-            @column += 1
-            closed = true
-            break
-          elsif curr == "\n" || curr == "\r"
-            # Quebra de linha dentro de literal não finalizado
-            break
-          else
-            @pos += 1
-            @column += 1
-          end
-        end
-
-        if closed
-          full_lexeme = @source[start_pos...@pos]
-          @tokens << Token.new(:LITERAL_STRING, full_lexeme, start_line, start_col)
-          last_type_seen = nil
-        else
-          @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, quote_char)
-        end
-        next
-      end
-
-      # 5. Números (Floats e Inteiros)
-      if (match = @source.match(NUMBER_REGEX, @pos))
-        lexeme = match[1]
-        @tokens << Token.new(:NUMERO, lexeme, @line, @column)
-        @column += lexeme.length
-        @pos += lexeme.length
-        last_type_seen = nil
-        next
-      end
-
-      # 6. Identificadores e Palavras-Chave
-      if (match = @source.match(IDENTIFIER_REGEX, @pos))
-        lexeme = match[1]
-        start_line = @line
-        start_col = @column
-
-        if KEYWORDS.key?(lexeme)
-          @tokens << Token.new(:TIPO_DADO, lexeme, start_line, start_col)
-          last_type_seen = lexeme
-        else
-          @tokens << Token.new(:IDENTIFICADOR, lexeme, start_line, start_col)
-          register_symbol(lexeme, last_type_seen, start_line)
-          last_type_seen = nil
-        end
-
-        @column += lexeme.length
-        @pos += lexeme.length
-        next
-      end
-
-      # 7. Operadores e Delimitadores
-      if SINGLE_CHAR_TOKENS.key?(char)
-        type = SINGLE_CHAR_TOKENS[char]
-        @tokens << Token.new(type, char, @line, @column)
-        last_type_seen = nil if char == ';'
-        @column += 1
-        @pos += 1
-        next
-      end
-
-      # 8. Caracteres Desconhecidos / Inválidos
-      @errors << LexicalError.new("Caractere desconhecido '#{char}'", @line, @column, char)
-      @pos += 1
-      @column += 1
+      handle_unknown_character
     end
 
     @tokenized = true
@@ -263,9 +129,11 @@ class Lexer
   end
 
   # Verifica se um símbolo já existe na Tabela de Símbolos
-  def has_symbol?(name)
+  def symbol?(name)
     !find_symbol(name).nil?
   end
+
+  alias has_symbol? symbol?
 
   private
 
@@ -278,5 +146,185 @@ class Lexer
       order = @symbols.size + 1
       @symbols << SymbolEntry.new(name, type, line, order)
     end
+  end
+
+  def handle_newlines_and_spaces
+    char = @source[@pos]
+
+    if char == "\n"
+      advance_newline(1)
+      true
+    elsif char == "\r"
+      advance_newline(@pos + 1 < @source.length && @source[@pos + 1] == "\n" ? 2 : 1)
+      true
+    elsif [' ', "\t"].include?(char)
+      @column += 1
+      @pos += 1
+      true
+    else
+      false
+    end
+  end
+
+  def advance_newline(offset)
+    @line += 1
+    @column = 1
+    @pos += offset
+  end
+
+  def handle_comments
+    return false unless @source[@pos] == '/' && @pos + 1 < @source.length
+
+    next_char = @source[@pos + 1]
+    if next_char == '/'
+      skip_line_comment
+      true
+    elsif next_char == '*'
+      skip_block_comment
+      true
+    else
+      false
+    end
+  end
+
+  def skip_line_comment
+    @pos += 2
+    @column += 2
+    while @pos < @source.length && !["\n", "\r"].include?(@source[@pos])
+      @pos += 1
+      @column += 1
+    end
+  end
+
+  def skip_block_comment
+    start_line = @line
+    start_col = @column
+    @pos += 2
+    @column += 2
+    closed = consume_block_comment_body
+
+    return if closed
+
+    @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*')
+  end
+
+  def consume_block_comment_body
+    while @pos < @source.length
+      if @source[@pos] == '*' && @pos + 1 < @source.length && @source[@pos + 1] == '/'
+        @pos += 2
+        @column += 2
+        return true
+      end
+
+      advance_comment_char
+    end
+    false
+  end
+
+  def advance_comment_char
+    char = @source[@pos]
+    if char == "\n"
+      advance_newline(1)
+    elsif char == "\r"
+      advance_newline(@pos + 1 < @source.length && @source[@pos + 1] == "\n" ? 2 : 1)
+    else
+      @column += 1
+      @pos += 1
+    end
+  end
+
+  def handle_string_literals
+    char = @source[@pos]
+    return false unless ['"', "'"].include?(char)
+
+    start_line = @line
+    start_col = @column
+    start_pos = @pos
+    @pos += 1
+    @column += 1
+
+    closed = consume_string_body(char)
+
+    if closed
+      full_lexeme = @source[start_pos...@pos]
+      @tokens << Token.new(:LITERAL_STRING, full_lexeme, start_line, start_col)
+      @last_type_seen = nil
+    else
+      @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, char)
+    end
+    true
+  end
+
+  def consume_string_body(quote_char)
+    while @pos < @source.length
+      curr = @source[@pos]
+      if curr == '\\' && @pos + 1 < @source.length
+        @pos += 2
+        @column += 2
+      elsif curr == quote_char
+        @pos += 1
+        @column += 1
+        return true
+      elsif ["\n", "\r"].include?(curr)
+        break
+      else
+        @pos += 1
+        @column += 1
+      end
+    end
+    false
+  end
+
+  def handle_numbers
+    match = @source.match(NUMBER_REGEX, @pos)
+    return false unless match
+
+    lexeme = match[1]
+    @tokens << Token.new(:NUMERO, lexeme, @line, @column)
+    @column += lexeme.length
+    @pos += lexeme.length
+    @last_type_seen = nil
+    true
+  end
+
+  def handle_identifiers_and_keywords
+    match = @source.match(IDENTIFIER_REGEX, @pos)
+    return false unless match
+
+    lexeme = match[1]
+    start_line = @line
+    start_col = @column
+
+    if KEYWORDS.key?(lexeme)
+      @tokens << Token.new(:TIPO_DADO, lexeme, start_line, start_col)
+      @last_type_seen = lexeme
+    else
+      @tokens << Token.new(:IDENTIFICADOR, lexeme, start_line, start_col)
+      register_symbol(lexeme, @last_type_seen, start_line)
+      @last_type_seen = nil
+    end
+
+    @column += lexeme.length
+    @pos += lexeme.length
+    true
+  end
+
+  def handle_operators_and_delimiters
+    char = @source[@pos]
+    return false unless SINGLE_CHAR_TOKENS.key?(char)
+
+    type = SINGLE_CHAR_TOKENS[char]
+    @tokens << Token.new(type, char, @line, @column)
+    @last_type_seen = nil if char == ';'
+    @column += 1
+    @pos += 1
+    true
+  end
+
+  def handle_unknown_character
+    char = @source[@pos]
+    @errors << LexicalError.new("Caractere desconhecido '#{char}'", @line, @column, char)
+    @pos += 1
+    @column += 1
   end
 end
