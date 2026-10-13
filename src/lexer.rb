@@ -1,9 +1,5 @@
 # frozen_string_literal: true
 
-# ==============================================================================
-# ESTRUTURAS DE DADOS (Modelos do Analisador Léxico)
-# ==============================================================================
-
 # Representa cada unidade léxica identificada no código-fonte.
 # Atende ao item "Lista de Tokens" do barema (tipo, lexema, linha e coluna).
 Token = Struct.new(:type, :lexeme, :line, :column) do
@@ -104,10 +100,6 @@ class Lexer
     @tokens
   end
 
-  # ============================================================================
-  # MÉTODOS PÚBLICOS DE ACESSO (Lazy Evaluation)
-  # ============================================================================
-
   # Retorna a lista completa de tokens processados
   def tokens
     tokenize unless @tokenized
@@ -148,10 +140,6 @@ class Lexer
 
   private
 
-  # ============================================================================
-  # GERENCIAMENTO DA TABELA DE SÍMBOLOS
-  # ============================================================================
-
   # Registra identificadores únicos garantindo a ordem cronológica de inserção
   def register_symbol(name, line)
     return if @symbols.any? { |s| s.name == name }
@@ -159,10 +147,6 @@ class Lexer
     order = @symbols.size + 1
     @symbols << SymbolEntry.new(name, nil, line, order)
   end
-
-  # ============================================================================
-  # TRATAMENTO DE ESPAÇOS, QUEBRAS DE LINHA E COMENTÁRIOS
-  # ============================================================================
 
   # Ignora espaços em branco e atualiza a contagem de linhas e colunas
   def handle_newlines_and_spaces
@@ -247,10 +231,6 @@ class Lexer
       @pos += 1
     end
   end
-
-  # ============================================================================
-  # RECONHECIMENTO DE TOKENS E LITERAIS
-  # ============================================================================
 
   # Processa literais de texto ("..." e '...'), suportando caracteres de escape
   def handle_string_literals
