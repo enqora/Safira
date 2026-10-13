@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Representa cada unidade léxica identificada no código-fonte.
-# Atende ao item "Lista de Tokens" do barema (tipo, lexema, linha e coluna).
 Token = Struct.new(:type, :lexeme, :line, :column) do
   def to_s
     format(
@@ -14,8 +12,6 @@ Token = Struct.new(:type, :lexeme, :line, :column) do
   end
 end
 
-# Representa uma entrada única na Tabela de Símbolos.
-# Armazena identificadores, tipo, linha e ordem cronológica de inserção (Item I do Barema).
 SymbolEntry = Struct.new(:name, :type, :line, :order) do
   def to_s
     format(
@@ -28,7 +24,6 @@ SymbolEntry = Struct.new(:name, :type, :line, :order) do
   end
 end
 
-# Armazena inconsistências léxicas sem interromper a execução do compilador.
 LexicalError = Struct.new(:message, :line, :column, :char) do
   def to_s
     "[Linha #{line}, Col #{column}] Erro Léxico: #{message}"
@@ -38,7 +33,6 @@ end
 class Lexer
   attr_reader :source
 
-  # Palavras reservadas e tipos primitivos reconhecidos pela linguagem
   KEYWORDS = {
     'int' => :TIPO_DADO,
     'float' => :TIPO_DADO,
@@ -46,7 +40,6 @@ class Lexer
     'double' => :TIPO_DADO
   }.freeze
 
-  # Mapeamento de operadores e símbolos de pontuação de caractere único
   SINGLE_CHAR_TOKENS = {
     '=' => :OP_ATRIB,
     '+' => :OP_SOMA,
@@ -61,7 +54,7 @@ class Lexer
     ',' => :VIRGULA
   }.freeze
 
-  # Expressões regulares ancoradas (\G) para casar a partir da posição atual do cursor
+
   IDENTIFIER_REGEX = /\G([a-zA-Z_][a-zA-Z0-9_]*)/.freeze
   NUMBER_REGEX     = /\G(\d+\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+|\d+)/.freeze
 
@@ -76,12 +69,11 @@ class Lexer
     @tokenized = false
   end
 
-  # Varre o código caractere a caractere gerando tokens e preenchendo a Tabela de Símbolos
   def tokenize
     return @tokens if @tokenized
 
     while @pos < @source.length
-      # Tenta reconhecer cada padrão léxico em ordem de precedência
+
       next if handle_newlines_and_spaces
       next if handle_comments
       next if handle_string_literals
@@ -89,7 +81,6 @@ class Lexer
       next if handle_identifiers_and_keywords
       next if handle_operators_and_delimiters
 
-      # Se nenhum padrão casar, captura o caractere desconhecido como erro léxico
       handle_unknown_character
     end
 
@@ -97,13 +88,12 @@ class Lexer
     @tokens
   end
 
-  # Retorna a lista completa de tokens processados
+
   def tokens
     tokenize unless @tokenized
     @tokens
   end
 
-  # Retorna a Tabela de Símbolos gerada na análise
   def symbols
     tokenize unless @tokenized
     @symbols
@@ -111,24 +101,20 @@ class Lexer
 
   alias symbol_table symbols
 
-  # Retorna a lista de erros léxicos encontrados
   def errors
     tokenize unless @tokenized
     @errors
   end
 
-  # Indica se a análise léxica ocorreu com 100% de assertividade (sem erros)
   def valid?
     tokenize unless @tokenized
     @errors.empty?
   end
 
-  # Localiza um símbolo existente na tabela pelo nome
   def find_symbol(name)
     symbols.find { |s| s.name == name }
   end
 
-  # Verifica se determinado identificador já foi registrado na tabela
   def symbol?(name)
     !find_symbol(name).nil?
   end
@@ -137,7 +123,6 @@ class Lexer
 
   private
 
-  # Registra identificadores únicos garantindo a ordem cronológica de inserção
   def register_symbol(name, line)
     return if @symbols.any? { |s| s.name == name }
 
@@ -145,7 +130,6 @@ class Lexer
     @symbols << SymbolEntry.new(name, nil, line, order)
   end
 
-  # Ignora espaços em branco e atualiza a contagem de linhas e colunas
   def handle_newlines_and_spaces
     char = @source[@pos]
 
@@ -170,7 +154,6 @@ class Lexer
     @pos += offset
   end
 
-  # Identifica e descarta comentários de linha (//) e de bloco (/* ... */)
   def handle_comments
     return false unless @source[@pos] == '/' && @pos + 1 < @source.length
 
@@ -271,7 +254,6 @@ class Lexer
     false
   end
 
-  # Processa literais numéricos (inteiros e ponto flutuante com notação científica)
   def handle_numbers
     match = @source.match(NUMBER_REGEX, @pos)
     return false unless match
@@ -283,7 +265,6 @@ class Lexer
     true
   end
 
-  # Reconhece identificadores e diferencia de palavras-chave da linguagem
   def handle_identifiers_and_keywords
     match = @source.match(IDENTIFIER_REGEX, @pos)
     return false unless match
@@ -304,7 +285,6 @@ class Lexer
     true
   end
 
-  # Reconhece operadores matemáticos, operador de atribuição e delimitadores
   def handle_operators_and_delimiters
     char = @source[@pos]
     return false unless SINGLE_CHAR_TOKENS.key?(char)
@@ -316,7 +296,6 @@ class Lexer
     true
   end
 
-  # Captura caracteres inválidos sem interromper o fluxo léxico
   def handle_unknown_character
     char = @source[@pos]
     @errors << LexicalError.new("Caractere desconhecido '#{char}'", @line, @column, char)
