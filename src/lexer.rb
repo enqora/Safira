@@ -35,9 +35,6 @@ LexicalError = Struct.new(:message, :line, :column, :char) do
   end
 end
 
-# ==============================================================================
-# CLASSE PRINCIPAL: Lexer
-# ==============================================================================
 class Lexer
   attr_reader :source
 
