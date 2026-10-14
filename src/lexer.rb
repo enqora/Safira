@@ -51,9 +51,23 @@ class Lexer
     ')' => :PARENTESE_DIR,
     '{' => :CHAVE_ESQ,
     '}' => :CHAVE_DIR,
-    ',' => :VIRGULA
+    ',' => :VIRGULA,
+    '<' => :OP_MENOR,
+    '>' => :OP_MAIOR,
+    '!' => :OP_NAO,
+    '[' => :COLCHETE_ESQ,
+    ']' => :COLCHETE_DIR
   }.freeze
 
+  # Operadores de 2 caracteres têm prioridade sobre os de 1 (ex.: '==' não vira dois '=')
+  TWO_CHAR_TOKENS = {
+    '==' => :OP_IGUAL,
+    '!=' => :OP_DIFERENTE,
+    '<=' => :OP_MENOR_IGUAL,
+    '>=' => :OP_MAIOR_IGUAL,
+    '&&' => :OP_E_LOGICO,
+    '||' => :OP_OU_LOGICO
+  }.freeze
 
   IDENTIFIER_REGEX = /\G([a-zA-Z_][a-zA-Z0-9_]*)/.freeze
   NUMBER_REGEX     = /\G(\d+\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+|\d+)/.freeze
@@ -286,13 +300,19 @@ class Lexer
   end
 
   def handle_operators_and_delimiters
-    char = @source[@pos]
-    return false unless SINGLE_CHAR_TOKENS.key?(char)
+    pair = @source[@pos, 2]
+    return emit_operator(TWO_CHAR_TOKENS[pair], pair) if TWO_CHAR_TOKENS.key?(pair)
 
-    type = SINGLE_CHAR_TOKENS[char]
-    @tokens << Token.new(type, char, @line, @column)
-    @column += 1
-    @pos += 1
+    char = @source[@pos]
+    return emit_operator(SINGLE_CHAR_TOKENS[char], char) if SINGLE_CHAR_TOKENS.key?(char)
+
+    false
+  end
+
+  def emit_operator(type, lexeme)
+    @tokens << Token.new(type, lexeme, @line, @column)
+    @column += lexeme.length
+    @pos += lexeme.length
     true
   end
 
