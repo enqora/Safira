@@ -3,7 +3,7 @@
 Token = Struct.new(:type, :lexeme, :line, :column) do
   def to_s
     format(
-      '[Linha %<line>2d, Col %<col>2d]  TIPO: %<type>-16s | LEXEMA: %<lexeme>p',
+      "[Linha %<line>2d, Col %<col>2d]  TIPO: %<type>-16s | LEXEMA: '%<lexeme>s'",
       line: line,
       col: column,
       type: type.to_s,
@@ -37,7 +37,12 @@ class Lexer
     'int' => :TIPO_DADO,
     'float' => :TIPO_DADO,
     'char' => :TIPO_DADO,
-    'double' => :TIPO_DADO
+    'double' => :TIPO_DADO,
+    'void' => :TIPO_DADO,
+    'if' => :KW_IF,
+    'else' => :KW_ELSE,
+    'while' => :KW_WHILE,
+    'return' => :KW_RETURN
   }.freeze
 
   SINGLE_CHAR_TOKENS = {
@@ -46,6 +51,7 @@ class Lexer
     '-' => :OP_SUB,
     '*' => :OP_MULT,
     '/' => :OP_DIV,
+    '%' => :OP_MOD,
     ';' => :PONTO_VIRGULA,
     '(' => :PARENTESE_ESQ,
     ')' => :PARENTESE_DIR,
@@ -65,11 +71,14 @@ class Lexer
     '<=' => :OP_MENOR_IGUAL,
     '>=' => :OP_MAIOR_IGUAL,
     '&&' => :OP_E_LOGICO,
-    '||' => :OP_OU_LOGICO
+    '||' => :OP_OU_LOGICO,
+    '++' => :OP_INC,
+    '--' => :OP_DEC
   }.freeze
 
   IDENTIFIER_REGEX = /\G([a-zA-Z_][a-zA-Z0-9_]*)/.freeze
   NUMBER_REGEX     = /\G(\d+\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+|\d+)/.freeze
+  MALFORMED_SUFFIX_REGEX = /\G[a-zA-Z_][a-zA-Z0-9_]*/.freeze
 
   def initialize(source)
     @source = source.to_s
@@ -239,7 +248,8 @@ class Lexer
 
     if closed
       full_lexeme = @source[start_pos...@pos]
-      @tokens << Token.new(:LITERAL_STRING, full_lexeme, start_line, start_col)
+      type = char == "'" ? :LITERAL_CHAR : :LITERAL_STRING
+      @tokens << Token.new(type, full_lexeme, start_line, start_col)
     else
       @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, char)
     end
@@ -271,7 +281,19 @@ class Lexer
     return false unless match
 
     lexeme = match[1]
+    suffix = @source.match(MALFORMED_SUFFIX_REGEX, @pos + lexeme.length)
+    return report_malformed_identifier(lexeme + suffix[0]) if suffix
+
     @tokens << Token.new(:NUMERO, lexeme, @line, @column)
+    @column += lexeme.length
+    @pos += lexeme.length
+    true
+  end
+
+  # Ex.: '123var' — consome tudo como um único erro em vez de gerar NUMERO + IDENTIFICADOR
+  def report_malformed_identifier(lexeme)
+    @errors << LexicalError.new("Identificador inválido '#{lexeme}' (não pode começar com dígito)",
+                                @line, @column, lexeme)
     @column += lexeme.length
     @pos += lexeme.length
     true
@@ -286,7 +308,7 @@ class Lexer
     start_col = @column
 
     if KEYWORDS.key?(lexeme)
-      @tokens << Token.new(:TIPO_DADO, lexeme, start_line, start_col)
+      @tokens << Token.new(KEYWORDS[lexeme], lexeme, start_line, start_col)
     else
       @tokens << Token.new(:IDENTIFICADOR, lexeme, start_line, start_col)
       register_symbol(lexeme, start_line)
