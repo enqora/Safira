@@ -101,6 +101,31 @@ assert(errors4[0].line == 1 && errors4[0].column == 5, 'Primeiro erro na linha 1
 assert(errors4[1].line == 2 && errors4[1].column == 1, 'Segundo erro na linha 2, coluna 1')
 assert(tokens4.any? { |t| t.lexeme == 'ok' }, 'Lexer continua tokenizando após erros sem lançar exceção')
 
+# Teste 5: Operadores Relacionais, Lógicos e Delimitadores
+puts "\n#{YELLOW}[5] Teste de Operadores Relacionais, Lógicos e Delimitadores#{RESET}"
+code5 = 'a>=1&&b<=2||c!=d&&e==f;x=a>b;y=c<d;z=!w;v[0];'
+
+lexer5 = Lexer.new(code5)
+types5 = lexer5.tokens.map(&:type)
+
+assert(lexer5.valid?, 'Nenhum erro léxico com os novos operadores')
+assert(types5.include?(:OP_IGUAL) && types5.count(:OP_ATRIB) == 3, "'==' gera :OP_IGUAL e não dois :OP_ATRIB")
+assert(types5.include?(:OP_MAIOR_IGUAL), "'>=' gera :OP_MAIOR_IGUAL")
+assert(types5.include?(:OP_MENOR_IGUAL), "'<=' gera :OP_MENOR_IGUAL")
+assert(types5.include?(:OP_DIFERENTE) && types5.count(:OP_NAO) == 1, "'!=' gera :OP_DIFERENTE e '!' isolado gera :OP_NAO")
+assert(types5.count(:OP_E_LOGICO) == 2 && types5.count(:OP_OU_LOGICO) == 1, "'&&' e '||' geram operadores lógicos")
+assert(types5.include?(:OP_MAIOR) && types5.include?(:OP_MENOR), "'>' e '<' isolados geram :OP_MAIOR e :OP_MENOR")
+assert(types5.include?(:COLCHETE_ESQ) && types5.include?(:COLCHETE_DIR), "'[' e ']' geram colchetes")
+
+expected_start = %i[IDENTIFICADOR OP_MAIOR_IGUAL NUMERO OP_E_LOGICO IDENTIFICADOR OP_MENOR_IGUAL NUMERO OP_OU_LOGICO]
+assert(types5.first(8) == expected_start, "Sequência 'a>=1&&b<=2||' tokenizada na ordem correta")
+
+token_b = lexer5.tokens.find { |t| t.lexeme == 'b' }
+assert(token_b.column == 7, "Coluna de 'b' após dois operadores de 2 chars deve ser 7 (obtido: #{token_b.column})")
+
+lexer5b = Lexer.new('a & b | c')
+assert(lexer5b.errors.size == 2, "'&' e '|' isolados geram erro léxico (obtido: #{lexer5b.errors.size})")
+
 puts "\n#{GREEN}================================================================#{RESET}"
 puts "#{GREEN}  TODOS OS TESTES UNITÁRIOS DO LEXER FORAM APROVADOS COM SUCESSO!#{RESET}"
 puts "#{GREEN}================================================================#{RESET}"
