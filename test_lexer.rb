@@ -126,6 +126,42 @@ assert(token_b.column == 7, "Coluna de 'b' após dois operadores de 2 chars deve
 lexer5b = Lexer.new('a & b | c')
 assert(lexer5b.errors.size == 2, "'&' e '|' isolados geram erro léxico (obtido: #{lexer5b.errors.size})")
 
+# Teste 6: Palavras-chave de controle de fluxo e void
+puts "\n#{YELLOW}[6] Teste de Palavras-chave (if, else, while, return, void)#{RESET}"
+code6 = <<~C
+  void main() {
+    while (x > 0) { if (x == 1) { return; } else { x = x - 1; } }
+  }
+C
+
+lexer6 = Lexer.new(code6)
+types6 = lexer6.tokens.map(&:type)
+
+assert(lexer6.valid?, 'Nenhum erro léxico no Teste 6')
+assert(lexer6.tokens.first.type == :TIPO_DADO && lexer6.tokens.first.lexeme == 'void', "'void' gera :TIPO_DADO")
+assert(%i[KW_IF KW_ELSE KW_WHILE KW_RETURN].all? { |k| types6.include?(k) }, 'if/else/while/return geram :KW_*')
+assert(lexer6.symbols.map(&:name) == %w[main x],
+       "Palavras-chave NÃO entram na tabela de símbolos (obtido: #{lexer6.symbols.map(&:name)})")
+
+# Teste 7: char vs string, %, ++/--, identificador malformado e formatação
+puts "\n#{YELLOW}[7] Teste de Literais, %, ++/--, '123var' e Formatação#{RESET}"
+lexer7 = Lexer.new(%(char c = 'a'; x = "abc"; y = x % 2; i++; j--;))
+types7 = lexer7.tokens.map(&:type)
+
+assert(lexer7.valid?, 'Nenhum erro léxico no Teste 7')
+assert(types7.include?(:LITERAL_CHAR) && types7.include?(:LITERAL_STRING), "'a' gera :LITERAL_CHAR e \"abc\" gera :LITERAL_STRING")
+assert(types7.include?(:OP_MOD), "'%' gera :OP_MOD")
+assert(types7.include?(:OP_INC) && types7.include?(:OP_DEC), "'++' e '--' geram :OP_INC e :OP_DEC")
+assert(!types7.include?(:OP_SOMA) && !types7.include?(:OP_SUB), "'++'/'--' não viram dois '+'/'-'")
+
+lexer7b = Lexer.new('int 123var = 5;')
+assert(lexer7b.errors.size == 1 && lexer7b.errors.first.char == '123var', "'123var' gera um único erro léxico")
+assert(lexer7b.errors.first.column == 5, "Erro de '123var' na coluna 5 (obtido: #{lexer7b.errors.first.column})")
+assert(lexer7b.tokens.none? { |t| t.lexeme == 'var' }, "'var' não vira identificador fantasma")
+assert(Lexer.new('x = 1.5e3;').valid?, 'Notação científica continua válida')
+
+assert(Lexer.new('int').tokens.first.to_s.end_with?("LEXEMA: 'int'"), 'Token#to_s usa aspas simples (layout do AGENT.md)')
+
 puts "\n#{GREEN}================================================================#{RESET}"
 puts "#{GREEN}  TODOS OS TESTES UNITÁRIOS DO LEXER FORAM APROVADOS COM SUCESSO!#{RESET}"
 puts "#{GREEN}================================================================#{RESET}"
