@@ -59,7 +59,6 @@ class Lexer
     ']' => :COLCHETE_DIR
   }.freeze
 
-  # Operadores de 2 caracteres têm prioridade sobre os de 1 (ex.: '==' não vira dois '=')
   TWO_CHAR_TOKENS = {
     '==' => :OP_IGUAL,
     '!=' => :OP_DIFERENTE,
@@ -226,7 +225,6 @@ class Lexer
     end
   end
 
-  # Processa literais de texto ("..." e '...'), suportando caracteres de escape
   def handle_string_literals
     char = @source[@pos]
     return false unless ['"', "'"].include?(char)
