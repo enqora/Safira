@@ -43,3 +43,6 @@ class Parser
         token = Token.new(:EOF, '', last.line, last.column + last.lexeme.to_s.length)
     end 
 end
+
+
+#Micael é gay
