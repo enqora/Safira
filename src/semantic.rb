@@ -6,20 +6,9 @@ SemanticError = Struct.new(:message, :line, :column, :length, :token, :kind) do
   end
 end
 
-# Análise semântica do Safira.
-#
-# Recebe a AST do Parser e a tabela de símbolos do Lexer e valida, na ordem
-# em que o código aparece:
-#   * Opção 1 — compatibilidade de tipos (com promoção numérica int -> float -> double)
-#   * Opção 2 — variável utilizada sem declaração prévia
-#   * Extra   — redeclaração de variável
-#
-# Não imprime nada: devolve erros em #errors e preenche o tipo de cada
-# variável declarada na tabela de símbolos (#symbol_table).
 class SemanticAnalyzer
   NUMERIC_RANK = { int: 0, float: 1, double: 2 }.freeze
 
-  # Tipos de origem aceitos para cada tipo de destino.
   ASSIGNABLE_FROM = {
     int: %i[int],
     float: %i[int float],
@@ -74,12 +63,11 @@ class SemanticAnalyzer
     in AssignNode[target:, expression:]
       analyze_assignment(target, expression)
     else
-      nil # nós ainda não tratados (if, while, funções...)
+      nil 
     end
   end
 
   def analyze_declaration(type_token, name_token, expression)
-    # A expressão é avaliada antes de declarar o nome: 'int x = x;' usa x sem declaração.
     expr_type = infer_type(expression)
 
     if (previous = @declared[name_token.lexeme])
@@ -107,7 +95,7 @@ class SemanticAnalyzer
 
     if entry
       entry.type = type
-      entry.line = name_token.line # o lexer registra a 1ª aparição; aqui vale a declaração
+      entry.line = name_token.line 
     else
       entry = SymbolEntry.new(name_token.lexeme, type, name_token.line, @symbol_table.size + 1)
       @symbol_table << entry
@@ -116,7 +104,6 @@ class SemanticAnalyzer
     @declared[name_token.lexeme] = entry
   end
 
-  # Devolve :int, :float, :double, :char, :string, :error (já reportado) ou nil (sem expressão).
   def infer_type(expr)
     case expr
     in nil
@@ -185,7 +172,6 @@ class SemanticAnalyzer
     report(first, message, :type_mismatch, length)
   end
 
-  # Primeiro token da expressão e quantas colunas ela ocupa (para o ^^^^ do diagnóstico).
   def expression_span(expression, fallback_token)
     tokens = collect_tokens(expression)
     return [fallback_token, fallback_token.lexeme.length] if tokens.empty?
