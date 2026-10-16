@@ -110,7 +110,6 @@ class Lexer
     @tokens
   end
 
-
   def tokens
     tokenize unless @tokenized
     @tokens
@@ -290,7 +289,6 @@ class Lexer
     true
   end
 
-  # Ex.: '123var' — consome tudo como um único erro em vez de gerar NUMERO + IDENTIFICADOR
   def report_malformed_identifier(lexeme)
     @errors << LexicalError.new("Identificador inválido '#{lexeme}' (não pode começar com dígito)",
                                 @line, @column, lexeme)
