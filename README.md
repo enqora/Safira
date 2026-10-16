@@ -26,11 +26,7 @@ As gems do `Gemfile` (`rspec`, `rubocop`, `ruby-lsp`) são só para desenvolvime
 
 ## Como usar
 
-> 🚧 **Em construção.** O ponto de entrada (`compiler.rb`) ainda não foi
-> implementado. Por enquanto, use os testes para ver os módulos prontos
-> funcionando (seção [Testes](#testes)).
-
-Quando estiver completo, o uso será:
+Execute direto na raiz do projeto passando um arquivo `.c`:
 
 ```bash
 ruby compiler.rb samples/valid.c
@@ -130,13 +126,17 @@ O Safira reconhece este subconjunto de C:
 ```
 Safira/
 ├── src/
-│   ├── lexer.rb        # análise léxica + tabela de símbolos
-│   ├── parser.rb       # análise sintática + nós da AST
-│   └── semantic.rb     # análise semântica
-├── samples/            # arquivos .c de exemplo
-├── compiler.rb         # ponto de entrada e formatação visual
-├── test_lexer.rb       # testes do lexer
-└── test_cursor.rb      # testes do cursor do parser
+│   ├── lexer.rb            # análise léxica + tabela de símbolos
+│   ├── parser.rb           # análise sintática + nós da AST
+│   └── semantic.rb         # análise semântica
+├── samples/                # arquivos .c de exemplo (valid.c, err_type.c, err_scope.c)
+├── tests/                  # suítes de testes automatizados
+│   ├── test_lexer.rb
+│   ├── test_cursor.rb
+│   ├── test_parser.rb
+│   ├── test_semantic.rb
+│   └── test_compiler.rb
+└── compiler.rb             # ponto de entrada CLI e formatação visual
 ```
 
 **Regra de arquitetura:** os módulos em `src/` nunca imprimem nada. Eles apenas
@@ -153,10 +153,10 @@ trocável.
 | Análise léxica | ✅ Completa — tokens, tabela de símbolos, comentários, erros léxicos |
 | Nós da AST | ✅ Completos |
 | Cursor do parser | ✅ Completo — `peek`, `advance`, `check?`, `at_end?` |
-| Gramática do parser | 🚧 Em construção |
-| Análise semântica | ⬜ Não iniciada |
-| CLI (`compiler.rb`) | ⬜ Não iniciada |
-| Arquivos de exemplo | ⬜ Não criados |
+| Gramática do parser | ✅ Completa — declarações, precedência, parênteses, recuperação em modo pânico |
+| Análise semântica | ✅ Completa — compatibilidade de tipos, promoção numérica, escopo e redeclaração |
+| CLI (`compiler.rb`) | ✅ Completa — tabelas ASCII, árvore em Unicode, diagnósticos com `^^^^` e flags |
+| Arquivos de exemplo | ✅ Completos — `samples/valid.c`, `samples/err_type.c` e `samples/err_scope.c` |
 
 ---
 
@@ -165,11 +165,11 @@ trocável.
 Não é preciso instalar nada. Rode direto da raiz do projeto:
 
 ```bash
-ruby test_lexer.rb
-```
-
-```bash
-ruby test_cursor.rb
+ruby tests/test_lexer.rb
+ruby tests/test_cursor.rb
+ruby tests/test_parser.rb
+ruby tests/test_semantic.rb
+ruby tests/test_compiler.rb
 ```
 
 Cada teste imprime uma lista de verificações. Verde é bom.
