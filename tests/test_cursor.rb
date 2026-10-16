@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative 'src/lexer'
-require_relative 'src/parser'
+require_relative '../src/lexer'
+require_relative '../src/parser'
 
 GREEN = "\e[32m"
 RED   = "\e[31m"
