@@ -161,20 +161,29 @@ module SafiraCLI
       end
     end
 
-    def render_semantic(semantic_errors, source_lines, has_prior_errors: false)
+    def render_semantic_skipped(has_syntax_errors: true, has_lexical_errors: false)
+      @out.puts
+      @out.puts @p.colorize('[4] ANÁLISE SEMÂNTICA', :yellow, :bold)
+      @out.puts @p.colorize(SECTION_LINE, :dim)
+
+      msg = if has_syntax_errors && has_lexical_errors
+              ' ⚠ Análise semântica não executada: corrija os erros léxicos e sintáticos acima.'
+            elsif has_syntax_errors
+              ' ⚠ Análise semântica não executada: corrija os erros sintáticos acima.'
+            else
+              ' ⚠ Análise semântica não executada: corrija os erros léxicos acima.'
+            end
+
+      @out.puts @p.colorize(msg, :yellow)
+    end
+
+    def render_semantic(semantic_errors, source_lines)
       @out.puts
       @out.puts @p.colorize('[4] ANÁLISE SEMÂNTICA', :yellow, :bold)
       @out.puts @p.colorize(SECTION_LINE, :dim)
 
       if semantic_errors.empty?
-        if has_prior_errors
-          @out.puts @p.colorize(
-            ' ⚠ Análise semântica concluída sem novos erros (corrija os erros léxicos/sintáticos acima).',
-            :yellow
-          )
-        else
-          @out.puts @p.colorize(' ✔ Nenhuma inconsistência semântica encontrada.', :green, :bold)
-        end
+        @out.puts @p.colorize(' ✔ Nenhuma inconsistência semântica encontrada.', :green, :bold)
         return
       end
 
@@ -365,22 +374,33 @@ module SafiraCLI
       parser = Parser.new(tokens)
       ast = parser.parse
 
-      semantic = SemanticAnalyzer.new(ast, lexer.symbols)
-      semantic.analyze
+      can_run_semantic = lexer.valid? && parser.valid?
+      semantic = nil
+
+      if can_run_semantic
+        semantic = SemanticAnalyzer.new(ast, lexer.symbols)
+        semantic.analyze
+      end
 
       renderer.render_header(file_path)
       renderer.render_tokens(tokens, lexer.errors, source_lines) if sections.include?(:tokens)
-      renderer.render_symbol_table(semantic.symbol_table) if sections.include?(:symbols)
+      renderer.render_symbol_table(semantic ? semantic.symbol_table : lexer.symbols) if sections.include?(:symbols)
       renderer.render_ast(ast, parser.errors, source_lines) if sections.include?(:ast)
 
       if sections.include?(:semantic)
-        has_prior_errors = !lexer.valid? || !parser.valid?
-        renderer.render_semantic(semantic.errors, source_lines, has_prior_errors: has_prior_errors)
+        if can_run_semantic
+          renderer.render_semantic(semantic.errors, source_lines)
+        else
+          renderer.render_semantic_skipped(
+            has_syntax_errors: !parser.valid?,
+            has_lexical_errors: !lexer.valid?
+          )
+        end
       end
 
       renderer.render_footer
 
-      lexer.valid? && parser.valid? && semantic.valid? ? 0 : 1
+      can_run_semantic && semantic.valid? ? 0 : 1
     end
 
     def print_usage(exit_code)

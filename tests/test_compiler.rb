@@ -2,7 +2,7 @@
 
 require 'stringio'
 require 'tempfile'
-require_relative '../compiler'
+require_relative '../safira'
 
 GREEN  = "\e[32m"
 RED    = "\e[31m"
@@ -17,8 +17,8 @@ def assert(condition, message)
     puts "  #{GREEN}✔#{RESET} #{message}"
   else
     puts "  #{RED}✖ [FALHA]#{RESET} #{message}"
-    $falhas += 1
   end
+  $falhas += 1 unless condition
 end
 
 def run_cli(*args)
@@ -29,7 +29,7 @@ def run_cli(*args)
 end
 
 puts "#{BLUE}================================================================#{RESET}"
-puts "#{BLUE}  SAFIRA — Testes da CLI e Renderizador (compiler.rb)           #{RESET}"
+puts "#{BLUE}  SAFIRA — Testes da CLI e Renderizador (safira.rb)             #{RESET}"
 puts "#{BLUE}================================================================#{RESET}\n"
 
 valid_path     = File.expand_path('../samples/valid.c', __dir__)
@@ -102,7 +102,7 @@ code_dir, _, err_dir = run_cli(__dir__)
 assert(code_dir == 1 && err_dir.include?('diretório'), 'Diretório informado como arquivo é barrado com mensagem clara')
 
 code_help, out_help, = run_cli('--help')
-assert(code_help.zero? && out_help.include?('Uso: ruby compiler.rb'), '--help retorna código 0 e instruções de uso')
+assert(code_help.zero? && out_help.include?('Uso: ruby safira.rb'), '--help retorna código 0 e instruções de uso')
 
 Tempfile.create(['broken', '.c']) do |tmp|
   tmp.write("int @x = ;\n")
@@ -110,6 +110,20 @@ Tempfile.create(['broken', '.c']) do |tmp|
   code_brk, out_brk, = run_cli(tmp.path)
   assert(code_brk == 1 && out_brk.include?('[ERRO LÉXICO]') && out_brk.include?('[ERRO SINTÁTICO]'),
          'Erros léxicos e sintáticos também são formatados com diagnóstico visual sem quebrar')
+end
+
+# [6] Supressão de cascata semântica em caso de erro sintático
+puts "\n#{YELLOW}[6] Supressão de Cascata Semântica em Erros Sintáticos#{RESET}"
+Tempfile.create(['cascade', '.c']) do |tmp|
+  tmp.write("int a = ;\na = 1;\nint b = a + 2;\n")
+  tmp.flush
+  code_casc, out_casc, = run_cli(tmp.path)
+  assert(code_casc == 1, 'Exit code 1 quando há erro sintático com cascata evitada')
+  assert(out_casc.include?('[ERRO SINTÁTICO]'), 'Identifica o erro sintático na linha 1')
+  assert(out_casc.include?('⚠ Análise semântica não executada: corrija os erros sintáticos acima.'),
+         'Exibe aviso claro de que a semântica não foi executada')
+  assert(!out_casc.include?('[ERRO SEMÂNTICO]'),
+         'Não emite falsos positivos de "variável não declarada" para linhas 2 e 3')
 end
 
 puts
