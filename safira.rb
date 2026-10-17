@@ -385,7 +385,7 @@ module SafiraCLI
 
     def print_usage(exit_code)
       @out.puts <<~USAGE
-        Uso: ruby compiler.rb <caminho/arquivo.c> [opções]
+        Uso: ruby safira.rb <caminho/arquivo.c> [opções]
 
         Opções de visualização (por padrão exibe todas as 4 etapas):
           --tokens      Exibe apenas [1] Lista de Tokens
@@ -400,7 +400,7 @@ module SafiraCLI
 
     def print_cli_error(message)
       @err.puts "✖ [ERRO] #{message}"
-      @err.puts "Execute 'ruby compiler.rb --help' para ver as instruções de uso."
+      @err.puts "Execute 'ruby safira.rb --help' para ver as instruções de uso."
       1
     end
   end
