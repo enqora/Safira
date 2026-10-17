@@ -63,7 +63,7 @@ class SemanticAnalyzer
     in AssignNode[target:, expression:]
       analyze_assignment(target, expression)
     else
-      nil 
+      nil
     end
   end
 
@@ -82,9 +82,7 @@ class SemanticAnalyzer
 
   def analyze_assignment(target, expression)
     entry = @declared[target.lexeme]
-    if entry.nil?
-      report(target, "Variável '#{target.lexeme}' utilizada sem declaração prévia.", :undeclared_variable)
-    end
+    report(target, "Variável '#{target.lexeme}' utilizada sem declaração prévia.", :undeclared_variable) if entry.nil?
 
     expr_type = infer_type(expression)
     check_compatibility(target, entry.type.to_sym, expression, expr_type) if entry
@@ -95,7 +93,7 @@ class SemanticAnalyzer
 
     if entry
       entry.type = type
-      entry.line = name_token.line 
+      entry.line = name_token.line
     else
       entry = SymbolEntry.new(name_token.lexeme, type, name_token.line, @symbol_table.size + 1)
       @symbol_table << entry
