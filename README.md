@@ -43,21 +43,6 @@ ruby compiler.rb samples/valid.c --semantic   # só a análise semântica
 
 ---
 
-## A gramática
-
-O Safira reconhece este subconjunto de C:
-
-```bnf
-<Programa>    ::= (<Declaracao> | <Atribuicao>)*
-<Declaracao>  ::= <Tipo> <identificador> ("=" <Expressao>)? ";"
-<Tipo>        ::= "int" | "float" | "char" | "double"
-<Atribuicao>  ::= <identificador> "=" <Expressao> ";"
-<Expressao>   ::= <Termo> (("+" | "-" | "*" | "/") <Termo>)*
-<Termo>       ::= <identificador> | <numero> | <string_literal>
-```
-
----
-
 ## Estrutura do projeto
 
 ```
