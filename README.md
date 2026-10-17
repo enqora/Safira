@@ -1,4 +1,4 @@
-# Safira <img src="https://cdn3.emoji.gg/emojis/87464-sapphire.png" width="20" height="20" alt="Sapphire">
+# Safira <img src="https://cdn3.emoji.gg/emojis/87464-sapphire.png" width="60" height="60" alt="Sapphire">
 
 Um compilador didático escrito em **Ruby puro**, que analisa código-fonte em C
 e mostra cada etapa do processo no terminal.
@@ -36,25 +36,6 @@ ruby safira.rb samples/valid.c --tokens     # só a lista de tokens
 ruby safira.rb samples/valid.c --symbols    # só a tabela de símbolos
 ruby safira.rb samples/valid.c --ast        # só a árvore sintática
 ruby safira.rb samples/valid.c --semantic   # só a análise semântica
-```
-
----
-
-## Estrutura do projeto
-
-```
-Safira/
-├── src/
-│   ├── lexer.rb            # análise léxica + tabela de símbolos
-│   ├── parser.rb           # análise sintática + nós da AST
-│   └── semantic.rb         # análise semântica
-├── samples/                # arquivos .c de exemplo 
-├── tests/                  # suítes de testes automatizados
-│   ├── test_lexer.rb
-│   ├── test_cursor.rb
-│   ├── test_parser.rb
-│   ├── test_semantic.rb
-└── safira.rb             # ponto de entrada CLI e formatação visual
 ```
 
 ---
