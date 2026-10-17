@@ -7,7 +7,7 @@ Projeto da disciplina de **Compiladores (2026.2)**.
 
 O Safira faz as três análises clássicas de um compilador — **léxica**,
 **sintática** e **semântica** — e apresenta o resultado de cada uma com tabelas,
-árvores e diagnósticos coloridos, em vez de despejar texto cru.
+árvores e diagnósticos coloridos bem bonitos :)
 
 ---
 
@@ -39,69 +39,6 @@ ruby compiler.rb samples/valid.c --tokens     # só a lista de tokens
 ruby compiler.rb samples/valid.c --symbols    # só a tabela de símbolos
 ruby compiler.rb samples/valid.c --ast        # só a árvore sintática
 ruby compiler.rb samples/valid.c --semantic   # só a análise semântica
-```
-
----
-
-## As quatro etapas
-
-### 1. Análise Léxica — *quebrar o texto em pedaços*
-
-Lê o código caractere a caractere e o transforma em **tokens**, cada um com tipo,
-lexema, linha e coluna. Ignora espaços e comentários.
-
-```
-int x = 5;
-```
-
-vira
-
-```
- [Linha  1, Col  1]  TIPO: TIPO_DADO        | LEXEMA: 'int'
- [Linha  1, Col  5]  TIPO: IDENTIFICADOR    | LEXEMA: 'x'
- [Linha  1, Col  7]  TIPO: OP_ATRIB         | LEXEMA: '='
- [Linha  1, Col  9]  TIPO: NUMERO           | LEXEMA: '5'
- [Linha  1, Col 10]  TIPO: PONTO_VIRGULA    | LEXEMA: ';'
-```
-
-### 2. Tabela de Símbolos — *quem é quem*
-
-Registra cada identificador encontrado, sem repetir, na ordem em que aparecem.
-
-```
- +---------------+---------+--------+----------------+
- | Identificador | Tipo    | Linha  | Ordem Inserção |
- +---------------+---------+--------+----------------+
- | x             | int     | 1      | 1              |
- | total         | float   | 2      | 2              |
- +---------------+---------+--------+----------------+
-```
-
-### 3. Análise Sintática — *o código faz sentido?*
-
-Verifica se os tokens seguem as regras da gramática e monta a **AST** (árvore
-sintática abstrata), que representa a estrutura do programa:
-
-```
- Atribuicao
- ├── ID (x)
- ├── OP_ATRIB (=)
- └── Expressao (+)
-     ├── ID (a)
-     └── NUM (5)
-```
-
-### 4. Análise Semântica — *o código faz sentido de verdade?*
-
-A sintaxe pode estar certa e o código ainda ser inválido. Duas checagens:
-
-- **Compatibilidade de tipos** — não dá para guardar texto numa variável `int`
-- **Variável não declarada** — não dá para usar o que nunca foi criado
-
-```
- ✖ [ERRO SEMÂNTICO] Incompatibilidade de tipos na linha 3:
-     3 | int resultado = "texto";
-       |                 ^^^^^^^ Não é possível atribuir String a 'resultado' (int).
 ```
 
 ---
@@ -138,51 +75,6 @@ Safira/
 │   └── test_compiler.rb
 └── compiler.rb             # ponto de entrada CLI e formatação visual
 ```
-
-**Regra de arquitetura:** os módulos em `src/` nunca imprimem nada. Eles apenas
-processam dados e devolvem estruturas ou listas de erro. Toda a formatação
-visual fica no `compiler.rb`. Isso mantém o núcleo testável e a apresentação
-trocável.
-
----
-
-## Status
-
-| Etapa | Situação |
-|---|---|
-| Análise léxica | ✅ Completa — tokens, tabela de símbolos, comentários, erros léxicos |
-| Nós da AST | ✅ Completos |
-| Cursor do parser | ✅ Completo — `peek`, `advance`, `check?`, `at_end?` |
-| Gramática do parser | ✅ Completa — declarações, precedência, parênteses, recuperação em modo pânico |
-| Análise semântica | ✅ Completa — compatibilidade de tipos, promoção numérica, escopo e redeclaração |
-| CLI (`compiler.rb`) | ✅ Completa — tabelas ASCII, árvore em Unicode, diagnósticos com `^^^^` e flags |
-| Arquivos de exemplo | ✅ Completos — `samples/valid.c`, `samples/err_type.c` e `samples/err_scope.c` |
-
----
-
-## Testes
-
-Não é preciso instalar nada. Rode direto da raiz do projeto:
-
-```bash
-ruby tests/test_lexer.rb
-ruby tests/test_cursor.rb
-ruby tests/test_parser.rb
-ruby tests/test_semantic.rb
-ruby tests/test_compiler.rb
-```
-
-Cada teste imprime uma lista de verificações. Verde é bom.
-
----
-
-## Tratamento de erros
-
-O Safira **nunca quebra com traceback**. Erros léxicos, sintáticos e semânticos
-são acumulados em listas e exibidos como diagnósticos legíveis ao final.
-
-Isso é proposital: um arquivo com três erros mostra os três de uma vez, em vez
-de parar no primeiro.
 
 ---
 
