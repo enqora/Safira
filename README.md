@@ -1,4 +1,4 @@
-# Safira <img src="https://cdn3.emoji.gg/emojis/87464-sapphire.png" width="60" height="60" alt="Sapphire">
+# Safira <img src="https://cdn3.emoji.gg/emojis/87464-sapphire.png" width="40" height="40" alt="Sapphire">
 
 Um compilador didático escrito em **Ruby puro**, que analisa código-fonte em C
 e mostra cada etapa do processo no terminal.
