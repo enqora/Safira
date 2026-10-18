@@ -72,12 +72,16 @@ class Parser
     until at_end?
       start_pos = @pos
       begin
-        stmt = parse_statement
-        stmt.is_a?(Array) ? declarations.concat(stmt) : declarations << stmt if stmt
+        statement = parse_statement
+        if statement.is_a?(Array)
+          declarations.concat(statement)
+        elsif statement
+          declarations << statement
+        end
       rescue SyntaxAbort
         synchronize(start_pos)
-      rescue StandardError => e
-        record_error(peek, "Erro sintático inesperado: #{e.message}")
+      rescue StandardError => error
+        record_error(peek, "Erro sintático inesperado: #{error.message}")
         synchronize(start_pos)
       end
     end
@@ -109,25 +113,25 @@ class Parser
 
   def parse_declaration
     type_token = advance
-    decls = []
+    declarations = []
 
     loop do
       name_token = consume(:IDENTIFICADOR, "Esperado identificador após o tipo '#{type_token.lexeme}'")
-      expr = match?(:OP_ATRIB) ? parse_expression : nil
-      decls << VarDeclNode.new(type_token: type_token, name_token: name_token, expression: expr)
+      expression = match?(:OP_ATRIB) ? parse_expression : nil
+      declarations << VarDeclNode.new(type_token: type_token, name_token: name_token, expression: expression)
       break unless match?(:VIRGULA)
     end
 
-    consume(:PONTO_VIRGULA, "Esperado ';' após a declaração de '#{decls.last.name_token.lexeme}'")
-    decls.size == 1 ? decls.first : decls
+    consume(:PONTO_VIRGULA, "Esperado ';' após a declaração de '#{declarations.last.name_token.lexeme}'")
+    declarations.size == 1 ? declarations.first : declarations
   end
 
   def parse_assignment
     target_token = advance
     consume(:OP_ATRIB, "Esperado '=' na atribuição para '#{target_token.lexeme}'")
-    expr = parse_expression
+    expression = parse_expression
     consume(:PONTO_VIRGULA, "Esperado ';' após a atribuição para '#{target_token.lexeme}'")
-    AssignNode.new(target: target_token, expression: expr)
+    AssignNode.new(target: target_token, expression: expression)
   end
 
   def parse_expression
@@ -158,12 +162,12 @@ class Parser
 
     if match?(:PARENTESE_ESQ)
       open_paren = previous
-      expr = parse_expression
+      expression = parse_expression
       consume(
         :PARENTESE_DIR,
         "Esperado ')' para fechar '(' aberto na linha #{open_paren.line}, coluna #{open_paren.column}"
       )
-      return expr
+      return expression
     end
 
     found = at_end? ? 'fim do arquivo' : "'#{peek.lexeme}'"

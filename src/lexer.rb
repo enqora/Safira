@@ -95,7 +95,6 @@ class Lexer
     return @tokens if @tokenized
 
     while @pos < @source.length
-
       next if handle_newlines_and_spaces
       next if handle_comments
       next if handle_string_literals
@@ -152,21 +151,10 @@ class Lexer
   end
 
   def handle_newlines_and_spaces
-    char = @source[@pos]
+    return false unless ["\n", "\r", ' ', "\t"].include?(@source[@pos])
 
-    if char == "\n"
-      advance_newline(1)
-      true
-    elsif char == "\r"
-      advance_newline(@pos + 1 < @source.length && @source[@pos + 1] == "\n" ? 2 : 1)
-      true
-    elsif [' ', "\t"].include?(char)
-      @column += 1
-      @pos += 1
-      true
-    else
-      false
-    end
+    advance_character
+    true
   end
 
   def advance_newline(offset)
@@ -214,14 +202,14 @@ class Lexer
         break
       end
 
-      advance_comment_char
+      advance_character
     end
 
     @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*') unless closed
     true
   end
 
-  def advance_comment_char
+  def advance_character
     char = @source[@pos]
     if char == "\n"
       advance_newline(1)
@@ -283,10 +271,7 @@ class Lexer
     suffix = @source.match(MALFORMED_SUFFIX_REGEX, @pos + lexeme.length)
     return report_malformed_identifier(lexeme + suffix[0]) if suffix
 
-    @tokens << Token.new(:NUMERO, lexeme, @line, @column)
-    @column += lexeme.length
-    @pos += lexeme.length
-    true
+    emit_token(:NUMERO, lexeme)
   end
 
   def report_malformed_identifier(lexeme)
@@ -302,15 +287,9 @@ class Lexer
     return false unless match
 
     lexeme = match[1]
-    start_line = @line
-    start_col = @column
-
-    if KEYWORDS.key?(lexeme)
-      @tokens << Token.new(KEYWORDS[lexeme], lexeme, start_line, start_col)
-    else
-      @tokens << Token.new(:IDENTIFICADOR, lexeme, start_line, start_col)
-      register_symbol(lexeme, start_line)
-    end
+    token_type = KEYWORDS.fetch(lexeme, :IDENTIFICADOR)
+    @tokens << Token.new(token_type, lexeme, @line, @column)
+    register_symbol(lexeme, @line) if token_type == :IDENTIFICADOR
 
     @column += lexeme.length
     @pos += lexeme.length
@@ -319,15 +298,15 @@ class Lexer
 
   def handle_operators_and_delimiters
     pair = @source[@pos, 2]
-    return emit_operator(TWO_CHAR_TOKENS[pair], pair) if TWO_CHAR_TOKENS.key?(pair)
+    return emit_token(TWO_CHAR_TOKENS[pair], pair) if TWO_CHAR_TOKENS.key?(pair)
 
     char = @source[@pos]
-    return emit_operator(SINGLE_CHAR_TOKENS[char], char) if SINGLE_CHAR_TOKENS.key?(char)
+    return emit_token(SINGLE_CHAR_TOKENS[char], char) if SINGLE_CHAR_TOKENS.key?(char)
 
     false
   end
 
-  def emit_operator(type, lexeme)
+  def emit_token(type, lexeme)
     @tokens << Token.new(type, lexeme, @line, @column)
     @column += lexeme.length
     @pos += lexeme.length
