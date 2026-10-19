@@ -24,7 +24,7 @@ module SafiraCLI
     def colorize(text, *styles)
       return text.to_s unless @enabled
 
-      prefix = styles.map { |s| CODES[s] }.compact.join
+      prefix = styles.map { |style| CODES[style] }.compact.join
       "#{prefix}#{text}#{CODES[:reset]}"
     end
   end
@@ -42,54 +42,49 @@ module SafiraCLI
 
     def initialize(out: $stdout, palette: Palette.new)
       @out = out
-      @p = palette
+      @palette = palette
     end
 
     def render_header(file_path)
-      @out.puts @p.colorize(BANNER_LINE, :blue, :bold)
-      @out.puts @p.colorize('  SAFIRA COMPILER — Análise de Código C', :bold)
-      @out.puts "  Arquivo: #{@p.colorize(file_path, :cyan)}"
-      @out.puts @p.colorize(BANNER_LINE, :blue, :bold)
+      @out.puts @palette.colorize(BANNER_LINE, :blue, :bold)
+      @out.puts @palette.colorize('  SAFIRA COMPILER — Análise de Código C', :bold)
+      @out.puts "  Arquivo: #{@palette.colorize(file_path, :cyan)}"
+      @out.puts @palette.colorize(BANNER_LINE, :blue, :bold)
     end
 
     def render_footer
-      @out.puts @p.colorize(BANNER_LINE, :blue, :bold)
+      @out.puts @palette.colorize(BANNER_LINE, :blue, :bold)
     end
 
     def render_tokens(tokens, lexical_errors, source_lines)
-      @out.puts
-      @out.puts @p.colorize('[1] ANÁLISE LÉXICA: LISTA DE TOKENS', :yellow, :bold)
-      @out.puts @p.colorize(SECTION_LINE, :dim)
+      render_section('[1] ANÁLISE LÉXICA: LISTA DE TOKENS')
 
       if tokens.empty? && lexical_errors.empty?
         @out.puts ' (Nenhum token encontrado)'
       else
         tokens.each do |token|
-          @out.puts " #{format_token_line(token)}"
+          @out.puts " #{token}"
         end
       end
 
       return if lexical_errors.empty?
 
       @out.puts
-      lexical_errors.each do |err|
-        length = [err.char.to_s.length, 1].max
+      lexical_errors.each do |error|
         render_diagnostic(
           tag: 'ERRO LÉXICO',
           title: 'Token inválido',
-          line: err.line,
-          column: err.column,
-          length: length,
-          message: err.message,
+          line: error.line,
+          column: error.column,
+          length: error.char.to_s.length,
+          message: error.message,
           source_lines: source_lines
         )
       end
     end
 
     def render_symbol_table(symbols)
-      @out.puts
-      @out.puts @p.colorize('[2] TABELA DE SÍMBOLOS', :yellow, :bold)
-      @out.puts @p.colorize(SECTION_LINE, :dim)
+      render_section('[2] TABELA DE SÍMBOLOS')
 
       headers = ['Identificador', 'Tipo', 'Linha', 'Ordem Inserção']
       rows = symbols.map do |entry|
@@ -101,14 +96,18 @@ module SafiraCLI
         ]
       end
 
-      min_widths = [13, 7, 6, 14]
-      widths = headers.each_index.map do |idx|
-        content_max = ([headers[idx]] + rows.map { |r| r[idx] }).map(&:length).max
-        [content_max, min_widths[idx]].max
+      minimum_widths = [13, 7, 6, 14]
+      widths = headers.each_with_index.map do |header, column_index|
+        column_values = [header] + rows.map { |row| row[column_index] }
+        content_width = column_values.map(&:length).max
+        [content_width, minimum_widths[column_index]].max
       end
 
-      border = " +-#{widths.map { |w| '-' * w }.join('-+-')}-+"
-      header_line = " | #{headers.each_with_index.map { |h, i| h.ljust(widths[i]) }.join(' | ')} |"
+      border = " +-#{widths.map { |width| '-' * width }.join('-+-')}-+"
+      header_cells = headers.each_with_index.map do |header, column_index|
+        header.ljust(widths[column_index])
+      end
+      header_line = " | #{header_cells.join(' | ')} |"
 
       @out.puts border
       @out.puts header_line
@@ -119,7 +118,9 @@ module SafiraCLI
         @out.puts " | #{'(Nenhum identificador registrado)'.ljust(empty_width)} |"
       else
         rows.each do |row|
-          formatted_cells = row.each_with_index.map { |cell, i| cell.ljust(widths[i]) }
+          formatted_cells = row.each_with_index.map do |cell, column_index|
+            cell.ljust(widths[column_index])
+          end
           @out.puts " | #{formatted_cells.join(' | ')} |"
         end
       end
@@ -128,83 +129,76 @@ module SafiraCLI
     end
 
     def render_ast(ast, parse_errors, source_lines)
-      @out.puts
-      @out.puts @p.colorize('[3] ANÁLISE SINTÁTICA: ÁRVORE SINTÁTICA (AST)', :yellow, :bold)
-      @out.puts @p.colorize(SECTION_LINE, :dim)
+      render_section('[3] ANÁLISE SINTÁTICA: ÁRVORE SINTÁTICA (AST)')
 
       declarations = Array(ast&.declarations)
       if declarations.empty? && parse_errors.empty?
         @out.puts ' (Árvore vazia)'
       else
-        declarations.each_with_index do |node, idx|
+        declarations.each_with_index do |node, index|
           label, children = ast_to_tree(node)
-          @out.puts " #{@p.colorize(label, :yellow, :bold)}"
+          @out.puts " #{@palette.colorize(label, :yellow, :bold)}"
           render_tree_children(children, ' ')
-          @out.puts if idx < declarations.size - 1
+          @out.puts if index < declarations.size - 1
         end
       end
 
       return if parse_errors.empty?
 
       @out.puts if declarations.any?
-      parse_errors.each do |err|
-        length = [err.lexeme.to_s.length, 1].max
+      parse_errors.each do |error|
         render_diagnostic(
           tag: 'ERRO SINTÁTICO',
           title: 'Falha gramatical',
-          line: err.line,
-          column: err.column,
-          length: length,
-          message: err.message,
+          line: error.line,
+          column: error.column,
+          length: error.lexeme.to_s.length,
+          message: error.message,
           source_lines: source_lines
         )
       end
     end
 
     def render_semantic_skipped(has_syntax_errors: true, has_lexical_errors: false)
-      @out.puts
-      @out.puts @p.colorize('[4] ANÁLISE SEMÂNTICA', :yellow, :bold)
-      @out.puts @p.colorize(SECTION_LINE, :dim)
+      render_section('[4] ANÁLISE SEMÂNTICA')
 
-      msg = if has_syntax_errors && has_lexical_errors
-              ' ⚠ Análise semântica não executada: corrija os erros léxicos e sintáticos acima.'
-            elsif has_syntax_errors
-              ' ⚠ Análise semântica não executada: corrija os erros sintáticos acima.'
-            else
-              ' ⚠ Análise semântica não executada: corrija os erros léxicos acima.'
-            end
+      message = if has_syntax_errors && has_lexical_errors
+                  ' ⚠ Análise semântica não executada: corrija os erros léxicos e sintáticos acima.'
+                elsif has_syntax_errors
+                  ' ⚠ Análise semântica não executada: corrija os erros sintáticos acima.'
+                else
+                  ' ⚠ Análise semântica não executada: corrija os erros léxicos acima.'
+                end
 
-      @out.puts @p.colorize(msg, :yellow)
+      @out.puts @palette.colorize(message, :yellow)
     end
 
     def render_semantic(semantic_errors, source_lines)
-      @out.puts
-      @out.puts @p.colorize('[4] ANÁLISE SEMÂNTICA', :yellow, :bold)
-      @out.puts @p.colorize(SECTION_LINE, :dim)
+      render_section('[4] ANÁLISE SEMÂNTICA')
 
       if semantic_errors.empty?
-        @out.puts @p.colorize(' ✔ Nenhuma inconsistência semântica encontrada.', :green, :bold)
+        @out.puts @palette.colorize(' ✔ Nenhuma inconsistência semântica encontrada.', :green, :bold)
         return
       end
 
-      semantic_errors.each_with_index do |err, idx|
-        title = SEMANTIC_TITLES[err.kind] || 'Inconsistência semântica'
+      semantic_errors.each_with_index do |error, index|
+        title = SEMANTIC_TITLES[error.kind] || 'Inconsistência semântica'
         render_diagnostic(
           tag: 'ERRO SEMÂNTICO',
           title: title,
-          line: err.line,
-          column: err.column,
-          length: [err.length.to_i, 1].max,
-          message: err.message,
+          line: error.line,
+          column: error.column,
+          length: error.length,
+          message: error.message,
           source_lines: source_lines
         )
-        @out.puts if idx < semantic_errors.size - 1
+        @out.puts if index < semantic_errors.size - 1
       end
     end
 
     def render_diagnostic(tag:, title:, line:, column:, length:, message:, source_lines:)
       header = " ✖ [#{tag}] #{title} na linha #{line}:"
-      @out.puts @p.colorize(header, :red, :bold)
+      @out.puts @palette.colorize(header, :red, :bold)
 
       code_line = source_lines[line - 1].to_s.chomp
       gutter_width = [line.to_s.length + 5, 6].max
@@ -215,25 +209,21 @@ module SafiraCLI
 
       offset = [column.to_i - 1, 0].max
       carets = '^' * [length.to_i, 1].max
-      pointer = @p.colorize("#{carets} #{message}", :red)
+      pointer = @palette.colorize("#{carets} #{message}", :red)
       @out.puts "#{blank_gutter} | #{' ' * offset}#{pointer}"
     end
 
     private
 
-    def format_token_line(token)
-      format(
-        '[Linha %<line>2d, Col %<col>2d]  TIPO: %<type>-16s | LEXEMA: \'%<lexeme>s\'',
-        line: token.line,
-        col: token.column,
-        type: token.type.to_s,
-        lexeme: token.lexeme
-      )
+    def render_section(title)
+      @out.puts
+      @out.puts @palette.colorize(title, :yellow, :bold)
+      @out.puts @palette.colorize(SECTION_LINE, :dim)
     end
 
     def render_tree_children(children, prefix)
-      children.each_with_index do |(label, subchildren), idx|
-        last = (idx == children.size - 1)
+      children.each_with_index do |(label, subchildren), index|
+        last = (index == children.size - 1)
         connector = last ? '└── ' : '├── '
         @out.puts "#{prefix}#{connector}#{label}"
         next_prefix = prefix + (last ? '    ' : '│   ')
@@ -243,18 +233,16 @@ module SafiraCLI
 
     def ast_to_tree(node)
       case node
-      in VarDeclNode[type_token:, name_token:, expression: nil]
-        ['Declaracao', [
+      in VarDeclNode[type_token:, name_token:, expression:]
+        children = [
           ["TIPO_DADO (#{type_token.lexeme})", []],
           ["ID (#{name_token.lexeme})", []]
-        ]]
-      in VarDeclNode[type_token:, name_token:, expression:]
-        ['Declaracao', [
-          ["TIPO_DADO (#{type_token.lexeme})", []],
-          ["ID (#{name_token.lexeme})", []],
-          ['OP_ATRIB (=)', []],
-          ast_to_tree(expression)
-        ]]
+        ]
+        unless expression.nil?
+          children << ['OP_ATRIB (=)', []]
+          children << ast_to_tree(expression)
+        end
+        ['Declaracao', children]
       in AssignNode[target:, expression:]
         ['Atribuicao', [
           ["ID (#{target.lexeme})", []],
@@ -309,8 +297,8 @@ module SafiraCLI
       return 1 if source.nil?
 
       run_pipeline(options[:file], source, options[:sections], options[:color])
-    rescue StandardError => e
-      print_cli_error("Falha inesperada ao processar o arquivo: #{e.message}")
+    rescue StandardError => error
+      print_cli_error("Falha inesperada ao processar o arquivo: #{error.message}")
     end
 
     private
@@ -358,8 +346,8 @@ module SafiraCLI
       end
 
       File.read(file_path, encoding: 'UTF-8')
-    rescue SystemCallError, IOError => e
-      print_cli_error("Não foi possível ler o arquivo '#{file_path}': #{e.message}")
+    rescue SystemCallError, IOError => error
+      print_cli_error("Não foi possível ler o arquivo '#{file_path}': #{error.message}")
       nil
     end
 
