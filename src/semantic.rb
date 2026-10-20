@@ -33,8 +33,8 @@ class SemanticAnalyzer
 
     Array(@ast&.declarations).each do |node|
       analyze_node(node)
-    rescue StandardError => e
-      @errors << SemanticError.new("Falha interna na análise semântica: #{e.message}", 1, 1, 1, nil, :internal)
+    rescue StandardError => error
+      @errors << SemanticError.new("Falha interna na análise semântica: #{error.message}", 1, 1, 1, nil, :internal)
     end
 
     @analyzed = true
@@ -68,7 +68,7 @@ class SemanticAnalyzer
   end
 
   def analyze_declaration(type_token, name_token, expression)
-    expr_type = infer_type(expression)
+    expression_type = infer_type(expression)
 
     if (previous = @declared[name_token.lexeme])
       report(name_token, "Variável '#{name_token.lexeme}' já declarada anteriormente na linha #{previous.line}.",
@@ -77,15 +77,15 @@ class SemanticAnalyzer
     end
 
     declare(name_token, type_token.lexeme)
-    check_compatibility(name_token, type_token.lexeme.to_sym, expression, expr_type)
+    check_compatibility(name_token, type_token.lexeme.to_sym, expression, expression_type)
   end
 
   def analyze_assignment(target, expression)
     entry = @declared[target.lexeme]
     report(target, "Variável '#{target.lexeme}' utilizada sem declaração prévia.", :undeclared_variable) if entry.nil?
 
-    expr_type = infer_type(expression)
-    check_compatibility(target, entry.type.to_sym, expression, expr_type) if entry
+    expression_type = infer_type(expression)
+    check_compatibility(target, entry.type.to_sym, expression, expression_type) if entry
   end
 
   def declare(name_token, type)
@@ -102,8 +102,8 @@ class SemanticAnalyzer
     @declared[name_token.lexeme] = entry
   end
 
-  def infer_type(expr)
-    case expr
+  def infer_type(expression)
+    case expression
     in nil
       nil
     in NumberNode[token:]
@@ -156,32 +156,38 @@ class SemanticAnalyzer
     [left_type, right_type].max_by { |type| NUMERIC_RANK[type] }
   end
 
-  def check_compatibility(target_token, target_type, expression, expr_type)
-    return if expr_type.nil? || expr_type == :error
+  def check_compatibility(target_token, target_type, expression, expression_type)
+    return if expression_type.nil? || expression_type == :error
 
-    allowed = ASSIGNABLE_FROM[target_type]
-    return if allowed.nil? || allowed.include?(expr_type)
+    allowed_types = ASSIGNABLE_FROM[target_type]
+    return if allowed_types.nil? || allowed_types.include?(expression_type)
 
-    message = "Não é possível atribuir #{TYPE_NAMES[expr_type]} a '#{target_token.lexeme}' " \
+    message = "Não é possível atribuir #{TYPE_NAMES[expression_type]} a '#{target_token.lexeme}' " \
               "(#{TYPE_NAMES[target_type]})."
-    message += ' Possível perda de precisão.' if NUMERIC_RANK.key?(expr_type) && NUMERIC_RANK.key?(target_type)
+    if NUMERIC_RANK.key?(expression_type) && NUMERIC_RANK.key?(target_type)
+      message += ' Possível perda de precisão.'
+    end
 
-    first, length = expression_span(expression, target_token)
-    report(first, message, :type_mismatch, length)
+    first_token, length = expression_span(expression, target_token)
+    report(first_token, message, :type_mismatch, length)
   end
 
   def expression_span(expression, fallback_token)
     tokens = collect_tokens(expression)
     return [fallback_token, fallback_token.lexeme.length] if tokens.empty?
 
-    first = tokens.min_by { |t| [t.line, t.column] }
-    last = tokens.max_by { |t| [t.line, t.column] }
-    length = first.line == last.line ? last.column + last.lexeme.length - first.column : first.lexeme.length
-    [first, length]
+    first_token = tokens.min_by { |token| [token.line, token.column] }
+    last_token = tokens.max_by { |token| [token.line, token.column] }
+    length = if first_token.line == last_token.line
+               last_token.column + last_token.lexeme.length - first_token.column
+             else
+               first_token.lexeme.length
+             end
+    [first_token, length]
   end
 
-  def collect_tokens(expr)
-    case expr
+  def collect_tokens(expression)
+    case expression
     in BinaryOpNode[left:, operator_token:, right:]
       collect_tokens(left) + [operator_token] + collect_tokens(right)
     in { token: }
