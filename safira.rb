@@ -37,7 +37,9 @@ module SafiraCLI
       type_mismatch: 'Incompatibilidade de tipos',
       undeclared_variable: 'Variável não declarada',
       redeclaration: 'Redeclaração de variável',
-      invalid_operation: 'Operação inválida'
+      invalid_operation: 'Operação inválida',
+      invalid_condition: 'Condição inválida',
+      invalid_return: 'Retorno inválido'
     }.freeze
 
     def initialize(out: $stdout, palette: Palette.new)
@@ -249,11 +251,40 @@ module SafiraCLI
           ['OP_ATRIB (=)', []],
           ast_to_tree(expression)
         ]]
+      in IncDecNode[target:, operator_token:]
+        label = operator_token.lexeme == '++' ? 'Incremento' : 'Decremento'
+        ["#{label} (#{operator_token.lexeme})", [["ID (#{target.lexeme})", []]]]
+      in FunctionDefNode[return_type:, name_token:, params:, body:]
+        children = [["TIPO_RETORNO (#{return_type.lexeme})", []]]
+        children << ['Parametros', params.map { |param| parameter_tree(param) }] if params.any?
+        children << branch_tree('Corpo', body)
+        ["Funcao (#{name_token.lexeme})", children]
+      in BlockNode
+        branch_tree('Bloco', node)
+      in IfNode[keyword:, condition:, then_branch:, else_branch:]
+        children = [['Condicao', [ast_to_tree(condition)]], branch_tree('Entao', then_branch)]
+        children << branch_tree('Senao', else_branch) unless else_branch.nil?
+        ["Condicional (#{keyword.lexeme})", children]
+      in WhileNode[keyword:, condition:, body:]
+        ["Repeticao (#{keyword.lexeme})", [['Condicao', [ast_to_tree(condition)]], branch_tree('Corpo', body)]]
+      in ForNode[keyword:, init:, condition:, update:, body:]
+        children = []
+        children << ['Inicializacao', init.map { |statement| ast_to_tree(statement) }] if init.any?
+        children << ['Condicao', [ast_to_tree(condition)]] unless condition.nil?
+        children << ['Passo', [ast_to_tree(update)]] unless update.nil?
+        children << branch_tree('Corpo', body)
+        ["Repeticao (#{keyword.lexeme})", children]
+      in ReturnNode[keyword:, expression:]
+        ["Retorno (#{keyword.lexeme})", expression.nil? ? [] : [ast_to_tree(expression)]]
       in BinaryOpNode[left:, operator_token:, right:]
         ["Expressao (#{operator_token.lexeme})", [
           ast_to_tree(left),
           ast_to_tree(right)
         ]]
+      in UnaryOpNode[operator_token:, operand:]
+        ["Unario (#{operator_token.lexeme})", [ast_to_tree(operand)]]
+      in nil
+        ['(comando inválido)', []]
       in IdentifierNode[token:]
         ["ID (#{token.lexeme})", []]
       in NumberNode[token:]
@@ -265,6 +296,25 @@ module SafiraCLI
       else
         [node.class.name.to_s, []]
       end
+    end
+
+    # Rótulo seguido dos comandos de um bloco, ou do único comando do corpo.
+    def branch_tree(label, node)
+      case node
+      in BlockNode[statements: []]
+        [label, [['(vazio)', []]]]
+      in BlockNode[statements:]
+        [label, statements.map { |statement| ast_to_tree(statement) }]
+      else
+        [label, [ast_to_tree(node)]]
+      end
+    end
+
+    def parameter_tree(param)
+      ['Parametro', [
+        ["TIPO_DADO (#{param.type_token.lexeme})", []],
+        ["ID (#{param.name_token.lexeme})", []]
+      ]]
     end
   end
 
