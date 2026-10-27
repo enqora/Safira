@@ -42,6 +42,7 @@ class Lexer
     'if' => :KW_IF,
     'else' => :KW_ELSE,
     'while' => :KW_WHILE,
+    'for' => :KW_FOR,
     'return' => :KW_RETURN
   }.freeze
 
