@@ -120,7 +120,7 @@ class Parser
   def parse_statement
     case peek.type
     when :TIPO_DADO then parse_declaration
-    when :IDENTIFICADOR then parse_assignment_statement
+    when :IDENTIFICADOR, :OP_INC then parse_assignment_statement
     when :KW_IF then parse_if
     when :KW_WHILE then parse_while
     when :KW_FOR then parse_for
@@ -196,8 +196,25 @@ class Parser
 
   # Atribuição ou incremento sem o ';' final, reaproveitada no cabeçalho do 'for'.
   def parse_simple_assignment(context)
+    if match?(:OP_INC)
+      operator_token = previous
+      target = consume(:IDENTIFICADOR, "Esperado identificador após '#{operator_token.lexeme}'")
+      return IncDecNode.new(target: target, operator_token: operator_token)
+    end
+
     target = consume(:IDENTIFICADOR, "Esperado uma atribuição #{context}, mas foi encontrado #{describe(peek)}")
     return IncDecNode.new(target: target, operator_token: previous) if match?(:OP_INC, :OP_DEC)
+
+    if match?(:OP_SOMA_ATRIB, :OP_SUB_ATRIB)
+      compound_operator = previous
+      operator_type = compound_operator.type == :OP_SOMA_ATRIB ? :OP_SOMA : :OP_SUB
+      operator_token = Token.new(operator_type, compound_operator.lexeme[0],
+                                 compound_operator.line, compound_operator.column)
+      # Para alvos simples: i += expressão equivale a i = i + (expressão).
+      expression = BinaryOpNode.new(left: IdentifierNode.new(token: target),
+                                    operator_token: operator_token, right: parse_expression)
+      return AssignNode.new(target: target, expression: expression)
+    end
 
     consume(:OP_ATRIB, "Esperado '=' na atribuição para '#{target.lexeme}'")
     AssignNode.new(target: target, expression: parse_expression)
@@ -206,7 +223,11 @@ class Parser
   def describe_simple_statement(statement)
     case statement
     in IncDecNode[target:, operator_token:]
-      "'#{target.lexeme}#{operator_token.lexeme}'"
+      if operator_token.line < target.line || operator_token.column < target.column
+        "'#{operator_token.lexeme}#{target.lexeme}'"
+      else
+        "'#{target.lexeme}#{operator_token.lexeme}'"
+      end
     in AssignNode[target:]
       "a atribuição para '#{target.lexeme}'"
     end
