@@ -144,6 +144,50 @@ puts "\n#{YELLOW}[7] Integração com Arquivos de Exemplo (samples/*.c)#{RESET}"
   assert(lexer.valid? && parser.valid?, "samples/#{sample} passa nas análises léxica e sintática")
 end
 
+# [8] Atribuições compostas
+puts "\n#{YELLOW}[8] Atribuições Compostas (+= e -=)#{RESET}"
+p8 = parse_code('i += 2; i -= 3 + 4;')
+sum_assignment, sub_assignment = p8.parse.declarations
+assert(p8.valid?, '+= e -= são aceitos como comandos')
+assert(sum_assignment.is_a?(AssignNode) && sum_assignment.target.lexeme == 'i' &&
+       sum_assignment.expression.is_a?(BinaryOpNode) &&
+       sum_assignment.expression.left.token.lexeme == 'i' &&
+       sum_assignment.expression.operator_token.type == :OP_SOMA &&
+       sum_assignment.expression.operator_token.lexeme == '+' &&
+       sum_assignment.expression.right.token.lexeme == '2',
+       'i += 2 gera a estrutura de i = i + 2')
+assert(sub_assignment.expression.operator_token.type == :OP_SUB &&
+       sub_assignment.expression.operator_token.lexeme == '-' &&
+       sub_assignment.expression.right.is_a?(BinaryOpNode) &&
+       sub_assignment.expression.right.operator_token.lexeme == '+',
+       'i -= 3 + 4 preserva o agrupamento i = i - (3 + 4)')
+p8_for = parse_code('for (int i = 0; i < 10; i += 2) { i -= 1; }')
+assert(p8_for.valid? && p8_for.parse.declarations.first.update.is_a?(AssignNode),
+       'Atribuição composta também é aceita no passo do for')
+p8_invalid = parse_code('i += ; int valido = 1;')
+assert(!p8_invalid.valid? && p8_invalid.parse.declarations.any? { |node| node.is_a?(VarDeclNode) },
+       'Expressão ausente após += gera erro e preserva o comando seguinte')
+
+# [9] Pré-incremento como comando e no cabeçalho do for
+puts "\n#{YELLOW}[9] Pré-incremento (++i)#{RESET}"
+p9 = parse_code('++i; i++;')
+prefix, postfix = p9.parse.declarations
+assert(p9.valid? && [prefix, postfix].all? { |node| node.is_a?(IncDecNode) },
+       'Pré e pós-incremento são aceitos como comandos')
+assert(prefix.target.lexeme == 'i' && prefix.operator_token.lexeme == '++' &&
+       prefix.operator_token.column < prefix.target.column,
+       'Pré-incremento preserva o alvo e a posição do operador')
+p9_for = parse_code('for (++i; i < 10; ++i) { i += 1; }')
+assert(p9_for.valid? && p9_for.parse.declarations.first.update.is_a?(IncDecNode),
+       'Pré-incremento é aceito na inicialização e no passo do for')
+p9_invalid = parse_code('++2; int valido = 1;')
+assert(!p9_invalid.valid? && p9_invalid.errors.first.message.include?('Esperado identificador') &&
+       p9_invalid.parse.declarations.any? { |node| node.is_a?(VarDeclNode) },
+       'Incremento de literal é rejeitado e a análise continua')
+p9_missing = parse_code("++i\nint valido = 1;")
+assert(!p9_missing.valid? && p9_missing.errors.first.message.include?("'++i'"),
+       'Falta de ponto e vírgula descreve o pré-incremento na ordem correta')
+
 puts
 if $falhas.zero?
   puts "#{GREEN}================================================================#{RESET}"

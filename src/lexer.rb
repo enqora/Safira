@@ -67,6 +67,8 @@ class Lexer
   }.freeze
 
   TWO_CHAR_TOKENS = {
+    '+=' => :OP_SOMA_ATRIB,
+    '-=' => :OP_SUB_ATRIB,
     '==' => :OP_IGUAL,
     '!=' => :OP_DIFERENTE,
     '<=' => :OP_MENOR_IGUAL,
