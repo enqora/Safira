@@ -42,6 +42,7 @@ class Lexer
     'if' => :KW_IF,
     'else' => :KW_ELSE,
     'while' => :KW_WHILE,
+    'for' => :KW_FOR,
     'return' => :KW_RETURN
   }.freeze
 
@@ -66,6 +67,8 @@ class Lexer
   }.freeze
 
   TWO_CHAR_TOKENS = {
+    '+=' => :OP_SOMA_ATRIB,
+    '-=' => :OP_SUB_ATRIB,
     '==' => :OP_IGUAL,
     '!=' => :OP_DIFERENTE,
     '<=' => :OP_MENOR_IGUAL,
