@@ -126,6 +126,23 @@ Tempfile.create(['cascade', '.c']) do |tmp|
          'Não emite falsos positivos de "variável não declarada" para linhas 2 e 3')
 end
 
+# [7] Diretivas não impedem a análise semântica
+puts "\n#{YELLOW}[7] Diretivas de Pré-processador#{RESET}"
+directives_path = File.expand_path('../samples/diretivas.c', __dir__)
+code_directives, out_directives, err_directives = run_cli(directives_path)
+assert(code_directives.zero? && err_directives.empty?, 'Sample com diretivas passa pelo compilador')
+assert(out_directives.include?('Nenhuma inconsistência semântica encontrada.'),
+       'Análise semântica é executada após ignorar diretivas')
+Tempfile.create(['directives', '.c']) do |tmp|
+  tmp.write("#include <stdio.h>\nint main() {\n    int valor = ausente;\n    return 0;\n}\n")
+  tmp.flush
+  code_error, out_error, = run_cli(tmp.path)
+  assert(code_error == 1 && out_error.include?('[ERRO SEMÂNTICO]') && out_error.include?('ausente'),
+         'Erro semântico real após diretiva continua sendo detectado')
+  assert(!out_error.include?('[ERRO LÉXICO]') && !out_error.include?('[ERRO SINTÁTICO]'),
+         'Diretiva não produz erros nas etapas anteriores')
+end
+
 puts
 if $falhas.zero?
   puts "#{GREEN}================================================================#{RESET}"
