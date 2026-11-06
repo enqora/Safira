@@ -120,7 +120,7 @@ class Parser
   def parse_statement
     case peek.type
     when :TIPO_DADO then parse_declaration
-    when :IDENTIFICADOR, :OP_INC then parse_assignment_statement
+    when :IDENTIFICADOR, :OP_INC, :OP_DEC then parse_assignment_statement
     when :KW_IF then parse_if
     when :KW_WHILE then parse_while
     when :KW_FOR then parse_for
@@ -196,7 +196,7 @@ class Parser
 
   # Atribuição ou incremento sem o ';' final, reaproveitada no cabeçalho do 'for'.
   def parse_simple_assignment(context)
-    if match?(:OP_INC)
+    if match?(:OP_INC, :OP_DEC)
       operator_token = previous
       target = consume(:IDENTIFICADOR, "Esperado identificador após '#{operator_token.lexeme}'")
       return IncDecNode.new(target: target, operator_token: operator_token)

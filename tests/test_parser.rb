@@ -188,6 +188,20 @@ p9_missing = parse_code("++i\nint valido = 1;")
 assert(!p9_missing.valid? && p9_missing.errors.first.message.include?("'++i'"),
        'Falta de ponto e vírgula descreve o pré-incremento na ordem correta')
 
+# [10] Pré-decremento como comando e no cabeçalho do for
+puts "\n#{YELLOW}[10] Pré-decremento (--i)#{RESET}"
+p10 = parse_code('--i; for (--i; i > 0; --i) { i--; }')
+decrement, loop_node = p10.parse.declarations
+assert(p10.valid? && decrement.is_a?(IncDecNode) &&
+       decrement.target.lexeme == 'i' && decrement.operator_token.type == :OP_DEC,
+       'Pré-decremento é aceito como comando')
+assert(p10.valid? && loop_node.is_a?(ForNode) &&
+       [loop_node.init.first, loop_node.update].all? { |node| node.is_a?(IncDecNode) && node.operator_token.type == :OP_DEC },
+       'Pré-decremento é aceito na inicialização e no passo do for')
+p10_invalid = parse_code('--2;')
+assert(!p10_invalid.valid? && p10_invalid.errors.first.message.include?('Esperado identificador'),
+       'Pré-decremento exige um identificador')
+
 puts
 if $falhas.zero?
   puts "#{GREEN}================================================================#{RESET}"
