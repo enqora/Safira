@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
 SemanticError = Struct.new(:message, :line, :column, :length, :token, :kind) do
-  def to_s
-    "[Linha #{line}, Col #{column}] Erro Semântico: #{message}"
-  end
+  def to_s = "[Linha #{line}, Col #{column}] Erro Semântico: #{message}"
 end
 
 class SemanticAnalyzer
@@ -20,27 +18,21 @@ class SemanticAnalyzer
   def initialize(ast, symbol_table = [])
     @ast = ast
     @symbol_table = symbol_table
-    @errors = []
+    @errors = nil
     @scopes = [{}]
     @current_function = nil
-    @analyzed = false
   end
 
   def analyze
-    return @errors if @analyzed
+    return @errors if @errors
 
-    Array(@ast&.declarations).each { |node| analyze_node(node) }
-    @analyzed = true
+    @errors = []
+    @ast&.declarations&.each { |node| analyze_node(node) }
     @errors
   end
 
-  def errors
-    analyze
-  end
-
-  def valid?
-    analyze.empty?
-  end
+  def errors = analyze
+  def valid? = analyze.empty?
 
   def symbol_table
     analyze
@@ -195,15 +187,8 @@ class SemanticAnalyzer
     entry
   end
 
-  def lookup(name)
-    @scopes.reverse_each do |scope|
-      return scope[name] if scope.key?(name)
-    end
-    nil
-  end
-
   def lookup_variable(token)
-    entry = lookup(token.lexeme)
+    entry = @scopes.reverse_each.find { |scope| scope.key?(token.lexeme) }&.[](token.lexeme)
 
     if entry.nil?
       report(token, "Variável '#{token.lexeme}' utilizada sem declaração prévia.", :undeclared_variable)
@@ -218,9 +203,7 @@ class SemanticAnalyzer
     entry
   end
 
-  def type_of(item)
-    (item.is_a?(SymbolEntry) ? item.type : item.lexeme).to_sym
-  end
+  def type_of(item) = (item.is_a?(SymbolEntry) ? item.type : item.lexeme).to_sym
 
   def infer_type(expression)
     case expression
@@ -263,9 +246,14 @@ class SemanticAnalyzer
     return :error if left_type == :error || right_type == :error
 
     case operator_token.lexeme
-    when *LOGICAL_OPERATORS then logical_type(operator_token, left_type, right_type)
-    when *COMPARISON_OPERATORS then comparison_type(operator_token, left_type, right_type)
-    else arithmetic_type(operator_token, left_type, right_type)
+    when *LOGICAL_OPERATORS
+      return :int if SCALAR_TYPES.include?(left_type) && SCALAR_TYPES.include?(right_type)
+
+      report_binary_error(operator_token, left_type, right_type)
+    when *COMPARISON_OPERATORS
+      comparison_type(operator_token, left_type, right_type)
+    else
+      arithmetic_type(operator_token, left_type, right_type)
     end
   end
 
@@ -295,12 +283,6 @@ class SemanticAnalyzer
     :error
   end
 
-  def logical_type(operator_token, left_type, right_type)
-    return :int if SCALAR_TYPES.include?(left_type) && SCALAR_TYPES.include?(right_type)
-
-    report_binary_error(operator_token, left_type, right_type)
-  end
-
   def report_binary_error(operator_token, left_type, right_type)
     msg = "Operador '#{operator_token.lexeme}' não pode ser aplicado a " \
           "#{TYPE_NAMES[left_type]} e #{TYPE_NAMES[right_type]}."
@@ -324,9 +306,8 @@ class SemanticAnalyzer
     !target_rank.nil? && !expr_rank.nil? && expr_rank <= target_rank
   end
 
-  def precision_note(target_type, expression_type)
+  def precision_note(target_type, expression_type) =
     NUMERIC_RANK.key?(expression_type) && NUMERIC_RANK.key?(target_type) ? ' Possível perda de precisão.' : ''
-  end
 
   def report_span(expression, fallback_token, message, kind)
     tokens = collect_tokens(expression)
@@ -355,6 +336,6 @@ class SemanticAnalyzer
     # 'y += 1' vira 'y = y + 1' com o mesmo token dos dois lados; não repete o erro.
     return if @errors.any? { |e| e.line == token.line && e.column == token.column && e.kind == kind }
 
-    @errors << SemanticError.new(message, token.line, token.column, length || token.lexeme.to_s.length, token, kind)
+    @errors << SemanticError.new(message, token.line, token.column, length || token.lexeme.length, token, kind)
   end
 end
