@@ -87,7 +87,7 @@ assert(token_y.line == 4 && token_y.column == 19, "Posição de 'y' deve ser [4,
 puts "\n#{YELLOW}[4] Teste de Tratamento de Erros Léxicos Sem Travar#{RESET}"
 code4 = <<~C
   int @var = 10;
-  #invalido
+  int #invalido;
   float ok = 1.5;
 C
 
@@ -98,7 +98,7 @@ errors4 = lexer4.errors
 assert(!lexer4.valid?, 'Código com caracteres desconhecidos deve ser marcado como inválido')
 assert(errors4.size == 2, "Devem ser capturados 2 erros léxicos (@ e #) (obtido: #{errors4.size})")
 assert(errors4[0].line == 1 && errors4[0].column == 5, 'Primeiro erro na linha 1, coluna 5')
-assert(errors4[1].line == 2 && errors4[1].column == 1, 'Segundo erro na linha 2, coluna 1')
+assert(errors4[1].line == 2 && errors4[1].column == 5, 'Segundo erro na linha 2, coluna 5')
 assert(tokens4.any? { |t| t.lexeme == 'ok' }, 'Lexer continua tokenizando após erros sem lançar exceção')
 
 # Teste 5: Operadores Relacionais, Lógicos e Delimitadores
@@ -177,6 +177,25 @@ assert(lexer8.tokens.map(&:column) == [1, 2, 4, 5, 7, 8, 10, 11],
 assert(Lexer.new('+ - = ++ -- + = - =').tokens.map(&:type) == %i[
   OP_SOMA OP_SUB OP_ATRIB OP_INC OP_DEC OP_SOMA OP_ATRIB OP_SUB OP_ATRIB
 ], 'Operadores existentes e operadores separados por espaços mantêm seus tokens')
+
+# Teste 9: diretivas de uma linha
+puts "\n#{YELLOW}[9] Teste de Diretivas de Pré-processador#{RESET}"
+lexer9 = Lexer.new("#include <stdio.h>\r\n \t#define LIMITE 10\r\n  int x = 2;\r\n#define FIM 0")
+assert(lexer9.valid?, 'Diretivas são ignoradas, inclusive no fim do arquivo')
+assert(lexer9.tokens.map(&:lexeme) == %w[int x = 2 ;], 'Diretivas não geram tokens')
+assert(lexer9.symbols.map(&:name) == ['x'], 'Diretivas não inserem símbolos')
+assert(lexer9.tokens.first.line == 3 && lexer9.tokens.first.column == 3,
+       'Linha e coluna após diretivas com CRLF são preservadas')
+["\n", "\r"].each do |newline|
+  token = Lexer.new("#define X 1#{newline}int x;").tokens.first
+  assert(token.line == 2 && token.column == 1, 'Posição após diretiva respeita LF e CR')
+end
+assert(Lexer.new(%q{"#include <stdio.h>" '#'}).tokens.map(&:type) == %i[LITERAL_STRING LITERAL_CHAR],
+       '# dentro de literais é preservado')
+assert(Lexer.new("// #include <stdio.h>\n/* #define X 1 */ int x;").valid?,
+       '# dentro de comentários continua sendo ignorado')
+assert(Lexer.new('int x; #define X 1').errors.any? { |error| error.char == '#' },
+       '# após código na mesma linha continua sendo inválido')
 
 puts "\n#{GREEN}================================================================#{RESET}"
 puts "#{GREEN}  TODOS OS TESTES UNITÁRIOS DO LEXER FORAM APROVADOS COM SUCESSO!#{RESET}"
