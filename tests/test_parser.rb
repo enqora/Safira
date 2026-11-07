@@ -145,10 +145,10 @@ puts "\n#{YELLOW}[7] Integração com Arquivos de Exemplo (samples/*.c)#{RESET}"
 end
 
 # [8] Atribuições compostas
-puts "\n#{YELLOW}[8] Atribuições Compostas (+= e -=)#{RESET}"
-p8 = parse_code('i += 2; i -= 3 + 4;')
-sum_assignment, sub_assignment = p8.parse.declarations
-assert(p8.valid?, '+= e -= são aceitos como comandos')
+puts "\n#{YELLOW}[8] Atribuições Compostas (+=, -=, *=, /= e %=)#{RESET}"
+p8 = parse_code('i += 2; i -= 3 + 4; i *= 5; i /= 6; i %= 7;')
+sum_assignment, sub_assignment, mult_assignment, div_assignment, mod_assignment = p8.parse.declarations
+assert(p8.valid?, '+=, -=, *=, /= e %= são aceitos como comandos')
 assert(sum_assignment.is_a?(AssignNode) && sum_assignment.target.lexeme == 'i' &&
        sum_assignment.expression.is_a?(BinaryOpNode) &&
        sum_assignment.expression.left.token.lexeme == 'i' &&
@@ -161,7 +161,19 @@ assert(sub_assignment.expression.operator_token.type == :OP_SUB &&
        sub_assignment.expression.right.is_a?(BinaryOpNode) &&
        sub_assignment.expression.right.operator_token.lexeme == '+',
        'i -= 3 + 4 preserva o agrupamento i = i - (3 + 4)')
-p8_for = parse_code('for (int i = 0; i < 10; i += 2) { i -= 1; }')
+assert(mult_assignment.expression.operator_token.type == :OP_MULT &&
+       mult_assignment.expression.operator_token.lexeme == '*' &&
+       mult_assignment.expression.right.token.lexeme == '5',
+       'i *= 5 gera a estrutura de i = i * 5')
+assert(div_assignment.expression.operator_token.type == :OP_DIV &&
+       div_assignment.expression.operator_token.lexeme == '/' &&
+       div_assignment.expression.right.token.lexeme == '6',
+       'i /= 6 gera a estrutura de i = i / 6')
+assert(mod_assignment.expression.operator_token.type == :OP_MOD &&
+       mod_assignment.expression.operator_token.lexeme == '%' &&
+       mod_assignment.expression.right.token.lexeme == '7',
+       'i %= 7 gera a estrutura de i = i % 7')
+p8_for = parse_code('for (int i = 0; i < 10; i += 2) { i %= 3; }')
 assert(p8_for.valid? && p8_for.parse.declarations.first.update.is_a?(AssignNode),
        'Atribuição composta também é aceita no passo do for')
 p8_invalid = parse_code('i += ; int valido = 1;')

@@ -96,6 +96,11 @@ class SemanticAnalyzer
   end
 
   def analyze_declaration(type_token, name_token, expression)
+    if type_token.lexeme == 'void'
+      report(name_token, "Variável '#{name_token.lexeme}' não pode ser do tipo 'void'.", :invalid_type)
+      return
+    end
+
     expression_type = infer_type(expression)
     return if declare(name_token, type_token.lexeme, 'Variável').nil?
 
@@ -129,7 +134,13 @@ class SemanticAnalyzer
 
     @current_function = node
     within_scope do
-      params.each { |param| analyze_node(param) }
+      params.each do |param|
+        if param.type_token.lexeme == 'void'
+          report(param.name_token, "Parâmetro '#{param.name_token.lexeme}' não pode ser do tipo 'void'.", :invalid_type)
+        else
+          analyze_node(param)
+        end
+      end
       body.statements.each { |statement| analyze_node(statement) }
     end
   ensure

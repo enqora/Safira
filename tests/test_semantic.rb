@@ -118,6 +118,33 @@ err_scope = sample.call('err_scope.c')
 assert(kinds(err_scope) == %i[undeclared_variable undeclared_variable] && err_scope.errors.map(&:line) == [5, 6],
        "err_scope.c: 2 variáveis não declaradas nas linhas 5 e 6 (obtido: #{err_scope.errors.map { |e| [e.kind, e.line] }})")
 
+# [8] Restrições do Tipo void e Atribuições Compostas
+puts "\n#{YELLOW}[8] Restrições de 'void' e Atribuições Compostas#{RESET}"
+s8a = analyze('void x;')
+assert(!s8a.valid? && kinds(s8a) == [:invalid_type], "void x; é rejeitado com :invalid_type (obtido: #{kinds(s8a)})")
+assert(s8a.errors.first.message == "Variável 'x' não pode ser do tipo 'void'.",
+       "Mensagem de erro para variável void (obtido: #{s8a.errors.first.message})")
+
+s8b = analyze('void a = 1;')
+assert(kinds(s8b) == [:invalid_type], "void a = 1; é rejeitado com :invalid_type (obtido: #{kinds(s8b)})")
+
+s8c = analyze('int f(void a) { return 0; }')
+assert(kinds(s8c) == [:invalid_type], "int f(void a) é rejeitado com :invalid_type (obtido: #{kinds(s8c)})")
+assert(s8c.errors.first.message == "Parâmetro 'a' não pode ser do tipo 'void'.",
+       "Mensagem de erro para parâmetro void (obtido: #{s8c.errors.first.message})")
+
+s8d = analyze("void f(void) { return; }\nvoid g() { }")
+assert(s8d.valid?, "void como retorno e (void) como lista vazia de parâmetros são aceitos (obtido: #{s8d.errors.map(&:to_s)})")
+
+s8e = analyze("int i = 10;\ni += 2;\ni -= 1;\ni *= 3;\ni /= 2;\ni %= 4;")
+assert(s8e.valid?, "Operadores compostos com int são semanticamente válidos (obtido: #{s8e.errors.map(&:to_s)})")
+
+s8f = analyze("float f = 2.5;\nf %= 2;")
+assert(kinds(s8f) == [:invalid_operation], "f %= 2 com float gera :invalid_operation (obtido: #{kinds(s8f)})")
+
+op_sample = sample.call('operadores.c')
+assert(op_sample.valid?, "samples/operadores.c é semanticamente válido (obtido: #{op_sample.errors.map(&:to_s)})")
+
 puts
 if $falhas.zero?
   puts "#{GREEN}================================================================#{RESET}"
