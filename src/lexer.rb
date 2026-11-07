@@ -232,7 +232,8 @@ class Lexer
   def consume_string_body(quote)
     while @pos < @source.length && !newline?(@source[@pos])
       char = @source[@pos]
-      if char == '\\' && @pos + 1 < @source.length
+      # Literal não atravessa linha: barra antes da quebra não escapa nada, senão a contagem de linha se perde.
+      if char == '\\' && @pos + 1 < @source.length && !newline?(@source[@pos + 1])
         advance(2)
       elsif char == quote
         advance
@@ -272,17 +273,11 @@ class Lexer
 
   def read_operator
     pair = @source[@pos, 2]
+    char = @source[@pos]
     if (type = TWO_CHAR_TOKENS[pair])
       emit(type, pair)
-      return true
-    end
-
-    char = @source[@pos]
-    if (type = SINGLE_CHAR_TOKENS[char])
+    elsif (type = SINGLE_CHAR_TOKENS[char])
       emit(type, char)
-      return true
     end
-
-    false
   end
 end
