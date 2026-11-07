@@ -1,21 +1,15 @@
 # frozen_string_literal: true
 
 Token = Struct.new(:type, :lexeme, :line, :column) do
-  def to_s
-    format("[Linha %2d, Col %2d]  TIPO: %-16s | LEXEMA: '%s'", line, column, type, lexeme)
-  end
+  def to_s = format("[Linha %2d, Col %2d]  TIPO: %-16s | LEXEMA: '%s'", line, column, type, lexeme)
 end
 
 SymbolEntry = Struct.new(:name, :type, :line, :order) do
-  def to_s
-    "#{order}. #{name} (#{type || 'indefinido'}) [Linha #{line}]"
-  end
+  def to_s = "#{order}. #{name} (#{type || 'indefinido'}) [Linha #{line}]"
 end
 
 LexicalError = Struct.new(:message, :line, :column, :char) do
-  def to_s
-    "[Linha #{line}, Col #{column}] Erro Léxico: #{message}"
-  end
+  def to_s = "[Linha #{line}, Col #{column}] Erro Léxico: #{message}"
 end
 
 class Lexer
@@ -73,19 +67,19 @@ class Lexer
 
   def initialize(source)
     @source = source.to_s
-    @tokens = []
+    @tokens = nil
     @symbols = []
     @errors = []
     @line = 1
     @column = 1
     @pos = 0
     @line_start = 0
-    @tokenized = false
   end
 
   def tokenize
-    return @tokens if @tokenized
+    return @tokens if @tokens
 
+    @tokens = []
     while @pos < @source.length
       next if skip_whitespace
       next if skip_directive
@@ -100,13 +94,11 @@ class Lexer
       advance
     end
 
-    @tokenized = true
     @tokens
   end
 
-  def tokens
-    tokenize
-  end
+  def tokens = tokenize
+  def valid? = errors.empty?
 
   def symbols
     tokenize
@@ -118,10 +110,6 @@ class Lexer
     @errors
   end
 
-  def valid?
-    errors.empty?
-  end
-
   private
 
   def advance(n = 1)
@@ -129,27 +117,18 @@ class Lexer
     @column += n
   end
 
-  def advance_newline(offset)
-    @line += 1
-    @column = 1
-    @pos += offset
-    @line_start = @pos
-  end
-
   def advance_char
-    case @source[@pos]
-    when "\n"
-      advance_newline(1)
-    when "\r"
-      advance_newline(@source[@pos + 1] == "\n" ? 2 : 1)
+    if newline?(@source[@pos])
+      @pos += (@source[@pos, 2] == "\r\n" ? 2 : 1)
+      @line += 1
+      @column = 1
+      @line_start = @pos
     else
       advance
     end
   end
 
-  def newline?(char)
-    char == "\n" || char == "\r"
-  end
+  def newline?(char) = char == "\n" || char == "\r"
 
   def emit(type, lexeme)
     @tokens << Token.new(type, lexeme, @line, @column)
@@ -188,27 +167,21 @@ class Lexer
       advance while @pos < @source.length && !newline?(@source[@pos])
       true
     when '*'
-      skip_block_comment
+      start_line = @line
+      start_col = @column
+      advance(2)
+      while @pos < @source.length
+        if @source[@pos, 2] == '*/'
+          advance(2)
+          return true
+        end
+        advance_char
+      end
+      @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*')
       true
     else
       false
     end
-  end
-
-  def skip_block_comment
-    start_line = @line
-    start_col = @column
-    advance(2)
-
-    while @pos < @source.length
-      if @source[@pos, 2] == '*/'
-        advance(2)
-        return
-      end
-      advance_char
-    end
-
-    @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*')
   end
 
   def read_string
@@ -220,29 +193,22 @@ class Lexer
     start_pos = @pos
     advance
 
-    if consume_string_body(quote)
-      type = quote == "'" ? :LITERAL_CHAR : :LITERAL_STRING
-      @tokens << Token.new(type, @source[start_pos...@pos], start_line, start_col)
-    else
-      @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, quote)
-    end
-    true
-  end
-
-  def consume_string_body(quote)
     while @pos < @source.length && !newline?(@source[@pos])
-      char = @source[@pos]
-      # Literal não atravessa linha: barra antes da quebra não escapa nada, senão a contagem de linha se perde.
-      if char == '\\' && @pos + 1 < @source.length && !newline?(@source[@pos + 1])
+      # Barra antes da quebra não escapa nada, senão a contagem de linha se perde.
+      if @source[@pos] == '\\' && @pos + 1 < @source.length && !newline?(@source[@pos + 1])
         advance(2)
-      elsif char == quote
+      elsif @source[@pos] == quote
         advance
+        type = quote == "'" ? :LITERAL_CHAR : :LITERAL_STRING
+        @tokens << Token.new(type, @source[start_pos...@pos], start_line, start_col)
         return true
       else
         advance
       end
     end
-    false
+
+    @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, quote)
+    true
   end
 
   def read_number
@@ -272,12 +238,10 @@ class Lexer
   end
 
   def read_operator
-    pair = @source[@pos, 2]
-    char = @source[@pos]
-    if (type = TWO_CHAR_TOKENS[pair])
-      emit(type, pair)
-    elsif (type = SINGLE_CHAR_TOKENS[char])
-      emit(type, char)
+    if (type = TWO_CHAR_TOKENS[@source[@pos, 2]])
+      emit(type, @source[@pos, 2])
+    elsif (type = SINGLE_CHAR_TOKENS[@source[@pos]])
+      emit(type, @source[@pos])
     end
   end
 end
