@@ -44,6 +44,15 @@ assert(kinds(s1b) == %i[undeclared_variable undeclared_variable] && s1b.errors.m
 s1c = analyze("int main() { return 0; }\nmain *= 2;")
 assert(kinds(s1c) == %i[invalid_operation], "'main *= 2;' gera 1 erro de função usada como variável (obtido: #{kinds(s1c)})")
 
+puts "\n#{YELLOW}[2] return sem valor em função não-void#{RESET}"
+s2 = analyze('int f() { return; }')
+assert(kinds(s2) == %i[invalid_return], "'int f() { return; }' gera 1 :invalid_return (obtido: #{kinds(s2)})")
+assert(s2.errors.first&.message == "A função 'f' deve retornar um valor (int).",
+       "Mensagem cita a função e o tipo (obtido: #{s2.errors.first&.message})")
+assert(s2.errors.first&.column == 11 && s2.errors.first&.length == 6, "Cursor aponta o 'return' (coluna 11, 6 colunas)")
+s2b = analyze('void f() { return; }')
+assert(s2b.valid?, "'void f() { return; }' continua válido (obtido: #{kinds(s2b)})")
+
 puts
 if $falhas.zero?
   puts "#{GREEN}================================================================#{RESET}"
