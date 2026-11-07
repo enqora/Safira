@@ -43,6 +43,18 @@ module SafiraCLI
       invalid_type: 'Tipo inválido'
     }.freeze
 
+    GEM = <<~'ART'.lines.map(&:chomp).freeze
+        ______
+       /  /\  \
+      /__/__\__\
+      \  \  /  /
+       \  \/  /
+        \    /
+         \  /
+          \/
+    ART
+    GEM_WIDTH = GEM.map(&:length).max
+
     def initialize(out: $stdout, palette: Palette.new)
       @out = out
       @palette = palette
@@ -50,8 +62,22 @@ module SafiraCLI
 
     def render_header(file_path)
       @out.puts @palette.colorize(BANNER_LINE, :blue, :bold)
-      @out.puts @palette.colorize('  SAFIRA COMPILER — Análise de Código C', :bold)
-      @out.puts "  Arquivo: #{@palette.colorize(file_path, :cyan)}"
+      info = [
+        nil,
+        nil,
+        nil,
+        @palette.colorize('SAFIRA COMPILER — Análise de Código C', :bold),
+        "Arquivo: #{@palette.colorize(file_path, :cyan)}",
+        nil,
+        nil,
+        nil
+      ]
+
+      GEM.each_with_index do |line, idx|
+        # ljust antes de colorir para códigos ANSI não afetarem a largura
+        art = @palette.colorize(line.ljust(GEM_WIDTH), :cyan, :bold)
+        @out.puts "  #{art}   #{info[idx]}".rstrip
+      end
       @out.puts @palette.colorize(BANNER_LINE, :blue, :bold)
     end
 
