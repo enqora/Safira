@@ -163,19 +163,22 @@ assert(Lexer.new('x = 1.5e3;').valid?, 'Notação científica continua válida')
 assert(Lexer.new('int').tokens.first.to_s.end_with?("LEXEMA: 'int'"), 'Token#to_s usa aspas simples (layout do especificação)')
 
 # Teste 8: atribuição composta e preservação dos operadores existentes
-puts "\n#{YELLOW}[8] Teste de Atribuição Composta (+= e -=)#{RESET}"
-lexer8 = Lexer.new('i+=2; i-=1;')
+puts "\n#{YELLOW}[8] Teste de Atribuição Composta (+=, -=, *=, /= e %=)#{RESET}"
+lexer8 = Lexer.new('i+=2; i-=1; i*=3; i/=4; i%=5;')
 assert(lexer8.valid?, 'Atribuições compostas não geram erros léxicos')
 assert(lexer8.tokens.map(&:type) == %i[
   IDENTIFICADOR OP_SOMA_ATRIB NUMERO PONTO_VIRGULA
   IDENTIFICADOR OP_SUB_ATRIB NUMERO PONTO_VIRGULA
-], '+= e -= são reconhecidos como tokens únicos')
-assert(lexer8.tokens.map(&:lexeme) == %w[i += 2 ; i -= 1 ;],
+  IDENTIFICADOR OP_MULT_ATRIB NUMERO PONTO_VIRGULA
+  IDENTIFICADOR OP_DIV_ATRIB NUMERO PONTO_VIRGULA
+  IDENTIFICADOR OP_MOD_ATRIB NUMERO PONTO_VIRGULA
+], '+=, -=, *=, /= e %= são reconhecidos como tokens únicos')
+assert(lexer8.tokens.map(&:lexeme) == %w[i += 2 ; i -= 1 ; i *= 3 ; i /= 4 ; i %= 5 ;],
        'Lexemas das atribuições compostas são preservados')
-assert(lexer8.tokens.map(&:column) == [1, 2, 4, 5, 7, 8, 10, 11],
+assert(lexer8.tokens.map(&:column) == [1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23, 25, 26, 28, 29],
        'Operadores compostos avançam a coluna em dois caracteres')
-assert(Lexer.new('+ - = ++ -- + = - =').tokens.map(&:type) == %i[
-  OP_SOMA OP_SUB OP_ATRIB OP_INC OP_DEC OP_SOMA OP_ATRIB OP_SUB OP_ATRIB
+assert(Lexer.new('+ - = ++ -- + = - = * = / = % =').tokens.map(&:type) == %i[
+  OP_SOMA OP_SUB OP_ATRIB OP_INC OP_DEC OP_SOMA OP_ATRIB OP_SUB OP_ATRIB OP_MULT OP_ATRIB OP_DIV OP_ATRIB OP_MOD OP_ATRIB
 ], 'Operadores existentes e operadores separados por espaços mantêm seus tokens')
 
 # Teste 9: diretivas de uma linha

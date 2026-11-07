@@ -69,6 +69,9 @@ class Lexer
   TWO_CHAR_TOKENS = {
     '+=' => :OP_SOMA_ATRIB,
     '-=' => :OP_SUB_ATRIB,
+    '*=' => :OP_MULT_ATRIB,
+    '/=' => :OP_DIV_ATRIB,
+    '%=' => :OP_MOD_ATRIB,
     '==' => :OP_IGUAL,
     '!=' => :OP_DIFERENTE,
     '<=' => :OP_MENOR_IGUAL,
