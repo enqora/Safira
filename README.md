@@ -42,5 +42,7 @@ ruby safira.rb samples/valid.c --semantic   # só a análise semântica
 
 ## Autores
 
-- **Leonardo da Silva Badauê** ([@enqora](https://github.com/enqora))
+- **Leonardo Badauê** ([@enqora](https://github.com/enqora))
 - **Micael Melo** ([@MeloMicael](https://github.com/MeloMicael))
+- **Yan Mota** ([@Neves08](https://github.com/Neves08))
+- **Lucas Kelvim** ([@Lucaksc777](https://github.com/Lucaksc777))
