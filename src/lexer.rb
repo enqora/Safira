@@ -42,6 +42,7 @@ class Lexer
     'if' => :KW_IF,
     'else' => :KW_ELSE,
     'while' => :KW_WHILE,
+    'for' => :KW_FOR,
     'return' => :KW_RETURN
   }.freeze
 
@@ -66,6 +67,8 @@ class Lexer
   }.freeze
 
   TWO_CHAR_TOKENS = {
+    '+=' => :OP_SOMA_ATRIB,
+    '-=' => :OP_SUB_ATRIB,
     '==' => :OP_IGUAL,
     '!=' => :OP_DIFERENTE,
     '<=' => :OP_MENOR_IGUAL,
@@ -96,6 +99,7 @@ class Lexer
 
     while @pos < @source.length
       next if handle_newlines_and_spaces
+      next if handle_preprocessor_directive
       next if handle_comments
       next if handle_string_literals
       next if handle_numbers
@@ -161,6 +165,17 @@ class Lexer
     @line += 1
     @column = 1
     @pos += offset
+  end
+
+  # Ignora diretivas de uma linha, sem expandir macros ou importar cabeçalhos.
+  def handle_preprocessor_directive
+    return false unless @source[@pos] == '#'
+
+    line_start = @pos - (@column - 1)
+    return false unless @source[line_start...@pos].match?(/\A[ \t]*\z/)
+
+    advance_character while @pos < @source.length && !["\n", "\r"].include?(@source[@pos])
+    true
   end
 
   def handle_comments
