@@ -36,6 +36,13 @@ class Parser
   # Tokens que iniciam (ou fecham) uma construção: pontos seguros para retomar a análise.
   SYNC_TOKENS = %i[TIPO_DADO KW_IF KW_ELSE KW_WHILE KW_FOR KW_RETURN CHAVE_ESQ CHAVE_DIR].freeze
   PAREN_DELTA = { PARENTESE_ESQ: 1, PARENTESE_DIR: -1 }.freeze
+  COMPOUND_ASSIGNMENTS = {
+    OP_SOMA_ATRIB: :OP_SOMA,
+    OP_SUB_ATRIB: :OP_SUB,
+    OP_MULT_ATRIB: :OP_MULT,
+    OP_DIV_ATRIB: :OP_DIV,
+    OP_MOD_ATRIB: :OP_MOD
+  }.freeze
 
   def initialize(tokens)
     @tokens = tokens + [build_eof(tokens)]
@@ -205,9 +212,9 @@ class Parser
     target = consume(:IDENTIFICADOR, "Esperado uma atribuição #{context}, mas foi encontrado #{describe(peek)}")
     return IncDecNode.new(target: target, operator_token: previous) if match?(:OP_INC, :OP_DEC)
 
-    if match?(:OP_SOMA_ATRIB, :OP_SUB_ATRIB)
+    if match?(*COMPOUND_ASSIGNMENTS.keys)
       compound_operator = previous
-      operator_type = compound_operator.type == :OP_SOMA_ATRIB ? :OP_SOMA : :OP_SUB
+      operator_type = COMPOUND_ASSIGNMENTS[compound_operator.type]
       operator_token = Token.new(operator_type, compound_operator.lexeme[0],
                                  compound_operator.line, compound_operator.column)
       # Para alvos simples: i += expressão equivale a i = i + (expressão).
@@ -223,7 +230,7 @@ class Parser
   def describe_simple_statement(statement)
     case statement
     in IncDecNode[target:, operator_token:]
-      if operator_token.line < target.line || operator_token.column < target.column
+      if operator_token.line < target.line || (operator_token.line == target.line && operator_token.column < target.column)
         "'#{operator_token.lexeme}#{target.lexeme}'"
       else
         "'#{target.lexeme}#{operator_token.lexeme}'"

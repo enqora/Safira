@@ -39,7 +39,8 @@ module SafiraCLI
       redeclaration: 'Redeclaração de variável',
       invalid_operation: 'Operação inválida',
       invalid_condition: 'Condição inválida',
-      invalid_return: 'Retorno inválido'
+      invalid_return: 'Retorno inválido',
+      invalid_type: 'Tipo inválido'
     }.freeze
 
     def initialize(out: $stdout, palette: Palette.new)
