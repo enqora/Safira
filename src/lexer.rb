@@ -2,25 +2,13 @@
 
 Token = Struct.new(:type, :lexeme, :line, :column) do
   def to_s
-    format(
-      "[Linha %<line>2d, Col %<col>2d]  TIPO: %<type>-16s | LEXEMA: '%<lexeme>s'",
-      line: line,
-      col: column,
-      type: type.to_s,
-      lexeme: lexeme
-    )
+    format("[Linha %2d, Col %2d]  TIPO: %-16s | LEXEMA: '%s'", line, column, type, lexeme)
   end
 end
 
 SymbolEntry = Struct.new(:name, :type, :line, :order) do
   def to_s
-    format(
-      '%<order>d. %<name>s (%<type>s) [Linha %<line>d]',
-      order: order,
-      name: name,
-      type: type || 'indefinido',
-      line: line
-    )
+    "#{order}. #{name} (#{type || 'indefinido'}) [Linha #{line}]"
   end
 end
 
@@ -31,8 +19,6 @@ LexicalError = Struct.new(:message, :line, :column, :char) do
 end
 
 class Lexer
-  attr_reader :source
-
   KEYWORDS = {
     'int' => :TIPO_DADO,
     'float' => :TIPO_DADO,
@@ -82,9 +68,8 @@ class Lexer
     '--' => :OP_DEC
   }.freeze
 
-  IDENTIFIER_REGEX = /\G([a-zA-Z_][a-zA-Z0-9_]*)/.freeze
-  NUMBER_REGEX     = /\G(\d+\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+|\d+)/.freeze
-  MALFORMED_SUFFIX_REGEX = /\G[a-zA-Z_][a-zA-Z0-9_]*/.freeze
+  IDENTIFIER = /\G[a-zA-Z_][a-zA-Z0-9_]*/
+  NUMBER     = /\G(?:\d+\.\d+(?:[eE][+-]?\d+)?|\d+[eE][+-]?\d+|\d+)/
 
   def initialize(source)
     @source = source.to_s
@@ -94,6 +79,7 @@ class Lexer
     @line = 1
     @column = 1
     @pos = 0
+    @line_start = 0
     @tokenized = false
   end
 
@@ -101,15 +87,17 @@ class Lexer
     return @tokens if @tokenized
 
     while @pos < @source.length
-      next if handle_newlines_and_spaces
-      next if handle_preprocessor_directive
-      next if handle_comments
-      next if handle_string_literals
-      next if handle_numbers
-      next if handle_identifiers_and_keywords
-      next if handle_operators_and_delimiters
+      next if skip_whitespace
+      next if skip_directive
+      next if skip_comment
+      next if read_string
+      next if read_number
+      next if read_identifier
+      next if read_operator
 
-      handle_unknown_character
+      char = @source[@pos]
+      @errors << LexicalError.new("Caractere desconhecido '#{char}'", @line, @column, char)
+      advance
     end
 
     @tokenized = true
@@ -117,76 +105,87 @@ class Lexer
   end
 
   def tokens
-    tokenize unless @tokenized
-    @tokens
+    tokenize
   end
 
   def symbols
-    tokenize unless @tokenized
+    tokenize
     @symbols
   end
 
-  alias symbol_table symbols
-
   def errors
-    tokenize unless @tokenized
+    tokenize
     @errors
   end
 
   def valid?
-    tokenize unless @tokenized
-    @errors.empty?
+    errors.empty?
   end
-
-  def find_symbol(name)
-    symbols.find { |s| s.name == name }
-  end
-
-  def symbol?(name)
-    !find_symbol(name).nil?
-  end
-
-  alias has_symbol? symbol?
 
   private
 
-  def register_symbol(name, line)
-    return if @symbols.any? { |s| s.name == name }
-
-    order = @symbols.size + 1
-    @symbols << SymbolEntry.new(name, nil, line, order)
-  end
-
-  def handle_newlines_and_spaces
-    return false unless ["\n", "\r", ' ', "\t"].include?(@source[@pos])
-
-    advance_character
-    true
+  def advance(n = 1)
+    @pos += n
+    @column += n
   end
 
   def advance_newline(offset)
     @line += 1
     @column = 1
     @pos += offset
+    @line_start = @pos
   end
 
-  # Ignora diretivas de uma linha, sem expandir macros ou importar cabeçalhos.
-  def handle_preprocessor_directive
-    return false unless @source[@pos] == '#'
+  def advance_char
+    case @source[@pos]
+    when "\n"
+      advance_newline(1)
+    when "\r"
+      advance_newline(@source[@pos + 1] == "\n" ? 2 : 1)
+    else
+      advance
+    end
+  end
 
-    line_start = @pos - (@column - 1)
-    return false unless @source[line_start...@pos].match?(/\A[ \t]*\z/)
+  def newline?(char)
+    char == "\n" || char == "\r"
+  end
 
-    advance_character while @pos < @source.length && !["\n", "\r"].include?(@source[@pos])
+  def emit(type, lexeme)
+    @tokens << Token.new(type, lexeme, @line, @column)
+    advance(lexeme.length)
+  end
+
+  def register_symbol(name, line)
+    return if @symbols.any? { |s| s.name == name }
+
+    @symbols << SymbolEntry.new(name, nil, line, @symbols.size + 1)
+  end
+
+  def skip_whitespace
+    char = @source[@pos]
+    return false unless char == ' ' || char == "\t" || newline?(char)
+
+    advance_char
     true
   end
 
-  def handle_comments
-    return false unless @source[@pos] == '/' && @pos + 1 < @source.length
+  # Ignora diretivas (#include, #define) quando '#' é o primeiro caractere útil da linha.
+  def skip_directive
+    return false unless @source[@pos] == '#'
+    return false unless @source[@line_start...@pos].match?(/\A[ \t]*\z/)
+
+    advance while @pos < @source.length && !newline?(@source[@pos])
+    true
+  end
+
+  def skip_comment
+    return false unless @source[@pos] == '/'
 
     case @source[@pos + 1]
     when '/'
-      skip_line_comment
+      advance(2)
+      advance while @pos < @source.length && !newline?(@source[@pos])
       true
     when '*'
       skip_block_comment
@@ -196,145 +195,94 @@ class Lexer
     end
   end
 
-  def skip_line_comment
-    @pos += 2
-    @column += 2
-    while @pos < @source.length && !["\n", "\r"].include?(@source[@pos])
-      @pos += 1
-      @column += 1
-    end
-  end
-
   def skip_block_comment
     start_line = @line
     start_col = @column
-    @pos += 2
-    @column += 2
-    closed = false
+    advance(2)
 
     while @pos < @source.length
-      if @source[@pos] == '*' && @pos + 1 < @source.length && @source[@pos + 1] == '/'
-        @pos += 2
-        @column += 2
-        closed = true
-        break
+      if @source[@pos, 2] == '*/'
+        advance(2)
+        return
       end
-
-      advance_character
+      advance_char
     end
 
-    @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*') unless closed
-    true
+    @errors << LexicalError.new('Comentário de bloco não finalizado', start_line, start_col, '/*')
   end
 
-  def advance_character
-    char = @source[@pos]
-    if char == "\n"
-      advance_newline(1)
-    elsif char == "\r"
-      advance_newline(@pos + 1 < @source.length && @source[@pos + 1] == "\n" ? 2 : 1)
-    else
-      @column += 1
-      @pos += 1
-    end
-  end
-
-  def handle_string_literals
-    char = @source[@pos]
-    return false unless ['"', "'"].include?(char)
+  def read_string
+    quote = @source[@pos]
+    return false unless quote == '"' || quote == "'"
 
     start_line = @line
     start_col = @column
     start_pos = @pos
-    @pos += 1
-    @column += 1
+    advance
 
-    closed = consume_string_body(char)
-
-    if closed
-      full_lexeme = @source[start_pos...@pos]
-      type = char == "'" ? :LITERAL_CHAR : :LITERAL_STRING
-      @tokens << Token.new(type, full_lexeme, start_line, start_col)
+    if consume_string_body(quote)
+      type = quote == "'" ? :LITERAL_CHAR : :LITERAL_STRING
+      @tokens << Token.new(type, @source[start_pos...@pos], start_line, start_col)
     else
-      @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, char)
+      @errors << LexicalError.new('Literal de texto não finalizado', start_line, start_col, quote)
     end
     true
   end
 
-  def consume_string_body(quote_char)
-    while @pos < @source.length
-      curr = @source[@pos]
-      if curr == '\\' && @pos + 1 < @source.length
-        @pos += 2
-        @column += 2
-      elsif curr == quote_char
-        @pos += 1
-        @column += 1
+  def consume_string_body(quote)
+    while @pos < @source.length && !newline?(@source[@pos])
+      char = @source[@pos]
+      if char == '\\' && @pos + 1 < @source.length
+        advance(2)
+      elsif char == quote
+        advance
         return true
-      elsif ["\n", "\r"].include?(curr)
-        break
       else
-        @pos += 1
-        @column += 1
+        advance
       end
     end
     false
   end
 
-  def handle_numbers
-    match = @source.match(NUMBER_REGEX, @pos)
+  def read_number
+    match = @source.match(NUMBER, @pos)
     return false unless match
 
-    lexeme = match[1]
-    suffix = @source.match(MALFORMED_SUFFIX_REGEX, @pos + lexeme.length)
-    return report_malformed_identifier(lexeme + suffix[0]) if suffix
-
-    emit_token(:NUMERO, lexeme)
-  end
-
-  def report_malformed_identifier(lexeme)
-    @errors << LexicalError.new("Identificador inválido '#{lexeme}' (não pode começar com dígito)",
-                                @line, @column, lexeme)
-    @column += lexeme.length
-    @pos += lexeme.length
+    lexeme = match[0]
+    if (suffix = @source.match(IDENTIFIER, @pos + lexeme.length))
+      bad = lexeme + suffix[0]
+      @errors << LexicalError.new("Identificador inválido '#{bad}' (não pode começar com dígito)", @line, @column, bad)
+      advance(bad.length)
+    else
+      emit(:NUMERO, lexeme)
+    end
     true
   end
 
-  def handle_identifiers_and_keywords
-    match = @source.match(IDENTIFIER_REGEX, @pos)
+  def read_identifier
+    match = @source.match(IDENTIFIER, @pos)
     return false unless match
 
-    lexeme = match[1]
-    token_type = KEYWORDS.fetch(lexeme, :IDENTIFICADOR)
-    @tokens << Token.new(token_type, lexeme, @line, @column)
-    register_symbol(lexeme, @line) if token_type == :IDENTIFICADOR
-
-    @column += lexeme.length
-    @pos += lexeme.length
+    lexeme = match[0]
+    type = KEYWORDS.fetch(lexeme, :IDENTIFICADOR)
+    register_symbol(lexeme, @line) if type == :IDENTIFICADOR
+    emit(type, lexeme)
     true
   end
 
-  def handle_operators_and_delimiters
+  def read_operator
     pair = @source[@pos, 2]
-    return emit_token(TWO_CHAR_TOKENS[pair], pair) if TWO_CHAR_TOKENS.key?(pair)
+    if (type = TWO_CHAR_TOKENS[pair])
+      emit(type, pair)
+      return true
+    end
 
     char = @source[@pos]
-    return emit_token(SINGLE_CHAR_TOKENS[char], char) if SINGLE_CHAR_TOKENS.key?(char)
+    if (type = SINGLE_CHAR_TOKENS[char])
+      emit(type, char)
+      return true
+    end
 
     false
-  end
-
-  def emit_token(type, lexeme)
-    @tokens << Token.new(type, lexeme, @line, @column)
-    @column += lexeme.length
-    @pos += lexeme.length
-    true
-  end
-
-  def handle_unknown_character
-    char = @source[@pos]
-    @errors << LexicalError.new("Caractere desconhecido '#{char}'", @line, @column, char)
-    @pos += 1
-    @column += 1
   end
 end
