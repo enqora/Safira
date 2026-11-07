@@ -160,7 +160,7 @@ assert(lexer7b.errors.first.column == 5, "Erro de '123var' na coluna 5 (obtido: 
 assert(lexer7b.tokens.none? { |t| t.lexeme == 'var' }, "'var' não vira identificador fantasma")
 assert(Lexer.new('x = 1.5e3;').valid?, 'Notação científica continua válida')
 
-assert(Lexer.new('int').tokens.first.to_s.end_with?("LEXEMA: 'int'"), 'Token#to_s usa aspas simples (layout do AGENT.md)')
+assert(Lexer.new('int').tokens.first.to_s.end_with?("LEXEMA: 'int'"), 'Token#to_s usa aspas simples (layout do especificação)')
 
 # Teste 8: atribuição composta e preservação dos operadores existentes
 puts "\n#{YELLOW}[8] Teste de Atribuição Composta (+= e -=)#{RESET}"

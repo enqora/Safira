@@ -48,7 +48,7 @@ puts "\n#{YELLOW}[2] Incompatibilidade de Tipos (Opção 1)#{RESET}"
 s2 = analyze(%(int resultado = "texto";))
 err2 = s2.errors.first
 assert(s2.errors.size == 1 && err2.kind == :type_mismatch, 'int = "texto" gera 1 erro :type_mismatch')
-assert(err2.message == "Não é possível atribuir String a 'resultado' (int).", "Mensagem no formato do AGENT.md (obtido: #{err2.message})")
+assert(err2.message == "Não é possível atribuir String a 'resultado' (int).", "Mensagem no formato do especificação (obtido: #{err2.message})")
 assert(err2.line == 1 && err2.column == 17 && err2.length == 7, "Apontamento sobre o literal: col 17, 7 colunas (obtido: #{err2.column}/#{err2.length})")
 
 s2b = analyze(%(char c = "abc";\nint a = 1.5;\nint x;\nx = "a";))
@@ -64,7 +64,7 @@ puts "\n#{YELLOW}[3] Variável Não Declarada (Opção 2)#{RESET}"
 s3 = analyze("y = x + 1;")
 assert(kinds(s3) == %i[undeclared_variable undeclared_variable], 'Alvo e operando não declarados geram 2 erros')
 assert(s3.errors.map(&:column) == [1, 5], "Colunas apontam y e x (obtido: #{s3.errors.map(&:column)})")
-assert(s3.errors.first.message == "Variável 'y' utilizada sem declaração prévia.", 'Mensagem no formato do AGENT.md')
+assert(s3.errors.first.message == "Variável 'y' utilizada sem declaração prévia.", 'Mensagem no formato do especificação')
 
 s3b = analyze("int a = b;\nint x = x;")
 assert(kinds(s3b) == %i[undeclared_variable undeclared_variable], "Uso em declaração (inclusive 'int x = x;') é não declarado")
