@@ -61,17 +61,17 @@ class SemanticAnalyzer
       within_scope { statements.each { |stmt| analyze_node(stmt) } }
     in IfNode[keyword:, condition:, then_branch:, else_branch:]
       check_condition(keyword, condition)
-      analyze_node(then_branch)
-      analyze_node(else_branch)
+      analyze_body(then_branch)
+      analyze_body(else_branch)
     in WhileNode[keyword:, condition:, body:]
       check_condition(keyword, condition)
-      analyze_node(body)
+      analyze_body(body)
     in ForNode[keyword:, init:, condition:, update:, body:]
       within_scope do
         init.each { |stmt| analyze_node(stmt) }
         check_condition(keyword, condition)
         analyze_node(update)
-        analyze_node(body)
+        analyze_body(body)
       end
     in FunctionDefNode[return_type:, name_token:, params:, body:]
       analyze_function(return_type, name_token, params, body)
@@ -80,6 +80,11 @@ class SemanticAnalyzer
     else
       nil
     end
+  end
+
+  # Corpo sem chaves (ex.: 'if (1) int x = 1;') também precisa de escopo próprio, como um bloco.
+  def analyze_body(node)
+    node.is_a?(BlockNode) ? analyze_node(node) : within_scope { analyze_node(node) }
   end
 
   def analyze_declaration(type_token, name_token, expression, kind_label = 'Variável')

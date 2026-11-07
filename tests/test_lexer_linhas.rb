@@ -51,3 +51,4 @@ assert(escaped.tokens.map(&:type).count { |t| t == :LITERAL_STRING || t == :LITE
 puts "\n#{GREEN}================================================================#{RESET}"
 puts "#{GREEN}  TODOS OS TESTES DE LINHA DO LEXER FORAM APROVADOS!            #{RESET}"
 puts "#{GREEN}================================================================#{RESET}"
+

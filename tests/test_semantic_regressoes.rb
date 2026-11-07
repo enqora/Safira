@@ -53,6 +53,21 @@ assert(s2.errors.first&.column == 11 && s2.errors.first&.length == 6, "Cursor ap
 s2b = analyze('void f() { return; }')
 assert(s2b.valid?, "'void f() { return; }' continua válido (obtido: #{kinds(s2b)})")
 
+puts "\n#{YELLOW}[3] Corpo de if/while/for sem chaves tem escopo próprio#{RESET}"
+s3 = analyze("if (1) int x = 1;\nx = 2;")
+assert(kinds(s3) == %i[undeclared_variable] && s3.errors.first.line == 2,
+       "x declarado no corpo do if não existe na linha 2 (obtido: #{s3.errors.map { |e| [e.kind, e.line] }})")
+s3b = analyze("if (1) int x = 1;\nint x = 2;")
+assert(!kinds(s3b).include?(:redeclaration), "Declarar x de novo fora do if não é redeclaração (obtido: #{kinds(s3b)})")
+s3c = analyze("int n = 1;\nif (n) n = 2; else int y = 3;\nwhile (n) int z = 1;\nfor (;;) int w = 1;\ny = 1;\nz = 1;\nw = 1;")
+assert(kinds(s3c) == %i[undeclared_variable undeclared_variable undeclared_variable] &&
+       s3c.errors.map(&:line) == [5, 6, 7],
+       "else, while e for sem chaves também isolam a declaração (obtido: #{s3c.errors.map { |e| [e.kind, e.line] }})")
+s3d = analyze("int a = 1;\nif (a) a = 2;\nwhile (a) a = 0;")
+assert(s3d.valid?, "Corpo sem chaves continua enxergando variáveis de fora (obtido: #{kinds(s3d)})")
+s3e = analyze("int a = 1;\nif (a) 5;\na = 2;")
+assert(s3e.errors.empty?, "Ramo nil por erro sintático recuperado não quebra a semântica (obtido: #{kinds(s3e)})")
+
 puts
 if $falhas.zero?
   puts "#{GREEN}================================================================#{RESET}"
