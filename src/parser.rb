@@ -43,7 +43,6 @@ class Parser
     @pos = 0
     @errors = []
     @ast = nil
-    @parsed = false
     @block_depth = 0
   end
 
@@ -73,12 +72,10 @@ class Parser
   end
 
   def parse
-    return @ast if @parsed
+    return @ast if @ast
 
     declarations = []
     append_statement(declarations, parse_statement_with_recovery) until at_end?
-
-    @parsed = true
     @ast = ProgramNode.new(declarations: declarations)
   end
 
@@ -116,8 +113,14 @@ class Parser
     when :KW_FOR then parse_for
     when :KW_RETURN then parse_return
     when :CHAVE_ESQ then parse_block
-    when :KW_ELSE then report_dangling_else
-    when :CHAVE_DIR then report_unexpected_brace
+    when :KW_ELSE
+      record_error(advance, "'else' sem um 'if' correspondente")
+      nil
+    when :CHAVE_DIR
+      raise_syntax_error(peek, "Esperado um comando antes de '}'") if @block_depth.positive?
+
+      record_error(advance, "'}' sem um '{' correspondente")
+      nil
     else
       raise_syntax_error(peek, "Comando inválido ou inesperado #{describe(peek)}")
     end
@@ -296,46 +299,14 @@ class Parser
     statement.is_a?(Array) ? BlockNode.new(statements: statement) : statement
   end
 
-  def report_dangling_else
-    record_error(advance, "'else' sem um 'if' correspondente")
-    nil
-  end
-
-  def report_unexpected_brace
-    raise_syntax_error(peek, "Esperado um comando antes de '}'") if @block_depth.positive?
-
-    record_error(advance, "'}' sem um '{' correspondente")
-    nil
-  end
-
   # Precedência, da mais fraca para a mais forte: || → && → == != → < > <= >= → + - → * / % → unário
-  def parse_expression
-    parse_logical_or
-  end
-
-  def parse_logical_or
-    parse_left_associative(:OP_OU_LOGICO) { parse_logical_and }
-  end
-
-  def parse_logical_and
-    parse_left_associative(:OP_E_LOGICO) { parse_equality }
-  end
-
-  def parse_equality
-    parse_left_associative(:OP_IGUAL, :OP_DIFERENTE) { parse_relational }
-  end
-
-  def parse_relational
-    parse_left_associative(:OP_MENOR, :OP_MAIOR, :OP_MENOR_IGUAL, :OP_MAIOR_IGUAL) { parse_additive }
-  end
-
-  def parse_additive
-    parse_left_associative(:OP_SOMA, :OP_SUB) { parse_term }
-  end
-
-  def parse_term
-    parse_left_associative(:OP_MULT, :OP_DIV, :OP_MOD) { parse_unary }
-  end
+  def parse_expression  = parse_logical_or
+  def parse_logical_or  = parse_left_associative(:OP_OU_LOGICO) { parse_logical_and }
+  def parse_logical_and = parse_left_associative(:OP_E_LOGICO) { parse_equality }
+  def parse_equality    = parse_left_associative(:OP_IGUAL, :OP_DIFERENTE) { parse_relational }
+  def parse_relational  = parse_left_associative(:OP_MENOR, :OP_MAIOR, :OP_MENOR_IGUAL, :OP_MAIOR_IGUAL) { parse_additive }
+  def parse_additive    = parse_left_associative(:OP_SOMA, :OP_SUB) { parse_term }
+  def parse_term        = parse_left_associative(:OP_MULT, :OP_DIV, :OP_MOD) { parse_unary }
 
   def parse_left_associative(*operators)
     node = yield
@@ -375,29 +346,24 @@ class Parser
   # Se o token esperado falta mas o próximo já inicia outra construção, aponta o erro sem abortar.
   def consume_or_insert(type, message)
     return advance if check?(type)
-    raise_syntax_error(peek, message) unless resumable_after_missing?
+
+    resumable = at_end? || peek.line > previous.line || check?(:PONTO_VIRGULA) || SYNC_TOKENS.include?(peek.type)
+    raise_syntax_error(peek, message) unless resumable
 
     last = previous
-    @errors << ParseError.new(message, last.line, last.column + last.lexeme.to_s.length, nil)
+    @errors << ParseError.new(message, last.line, last.column + last.lexeme.length, nil)
     nil
-  end
-
-  def resumable_after_missing?
-    at_end? ||
-      peek.line > previous.line ||
-      check?(:PONTO_VIRGULA) ||
-      SYNC_TOKENS.include?(peek.type)
   end
 
   def describe(token) = token.type == :EOF ? 'fim do arquivo' : "'#{token.lexeme}'"
 
+  def record_error(token, message)
+    @errors << ParseError.new(message, token.line, token.column, token)
+  end
+
   def raise_syntax_error(token, message)
     record_error(token, message)
     raise SyntaxAbort
-  end
-
-  def record_error(token, message)
-    @errors << ParseError.new(message, token.line, token.column, token)
   end
 
   # Descarta tokens até ';' (fora de parênteses) ou início de comando/bloco, sem consumir '}'.
@@ -418,6 +384,6 @@ class Parser
     last = tokens.last
     return Token.new(:EOF, '', 1, 1) if last.nil?
 
-    Token.new(:EOF, '', last.line, last.column + last.lexeme.to_s.length)
+    Token.new(:EOF, '', last.line, last.column + last.lexeme.length)
   end
 end
