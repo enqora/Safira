@@ -136,13 +136,10 @@ module SafiraCLI
       declarations = Array(ast&.declarations)
       if declarations.empty? && parse_errors.empty?
         @out.puts ' (Árvore vazia)'
-      else
-        declarations.each_with_index do |node, index|
-          label, children = ast_to_tree(node)
-          @out.puts " #{@palette.colorize(label, :yellow, :bold)}"
-          render_tree_children(children, ' ')
-          @out.puts if index < declarations.size - 1
-        end
+      elsif declarations.any?
+        label, children = ast_to_tree(ast)
+        @out.puts " #{@palette.colorize(label, :yellow, :bold)}"
+        render_tree_children(children, ' ')
       end
 
       return if parse_errors.empty?
@@ -235,27 +232,25 @@ module SafiraCLI
 
     def ast_to_tree(node)
       case node
+      in ProgramNode[declarations:]
+        ['Programa', declarations.map { |decl| ast_to_tree(decl) }]
       in VarDeclNode[type_token:, name_token:, expression:]
         children = [
-          ["TIPO_DADO (#{type_token.lexeme})", []],
+          ["Tipo (#{type_token.lexeme})", []],
           ["ID (#{name_token.lexeme})", []]
         ]
-        unless expression.nil?
-          children << ['OP_ATRIB (=)', []]
-          children << ast_to_tree(expression)
-        end
+        children << ast_to_tree(expression) unless expression.nil?
         ['Declaracao', children]
       in AssignNode[target:, expression:]
         ['Atribuicao', [
           ["ID (#{target.lexeme})", []],
-          ['OP_ATRIB (=)', []],
           ast_to_tree(expression)
         ]]
       in IncDecNode[target:, operator_token:]
         label = operator_token.lexeme == '++' ? 'Incremento' : 'Decremento'
         ["#{label} (#{operator_token.lexeme})", [["ID (#{target.lexeme})", []]]]
       in FunctionDefNode[return_type:, name_token:, params:, body:]
-        children = [["TIPO_RETORNO (#{return_type.lexeme})", []]]
+        children = [["Tipo (#{return_type.lexeme})", []]]
         children << ['Parametros', params.map { |param| parameter_tree(param) }] if params.any?
         children << branch_tree('Corpo', body)
         ["Funcao (#{name_token.lexeme})", children]
@@ -312,7 +307,7 @@ module SafiraCLI
 
     def parameter_tree(param)
       ['Parametro', [
-        ["TIPO_DADO (#{param.type_token.lexeme})", []],
+        ["Tipo (#{param.type_token.lexeme})", []],
         ["ID (#{param.name_token.lexeme})", []]
       ]]
     end
