@@ -138,6 +138,10 @@ class SemanticAnalyzer
       return
     end
 
+    if expression.nil?
+      return report(keyword, "A função '#{name}' deve retornar um valor (#{TYPE_NAMES[return_type]}).", :invalid_return)
+    end
+
     return if compatible?(return_type, expression_type)
 
     message = "Não é possível retornar #{TYPE_NAMES[expression_type]} na função '#{name}' " \
