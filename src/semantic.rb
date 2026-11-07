@@ -8,19 +8,12 @@ end
 
 class SemanticAnalyzer
   NUMERIC_RANK = { int: 0, float: 1, double: 2 }.freeze
-
-  ASSIGNABLE_FROM = {
-    int: %i[int],
-    float: %i[int float],
-    double: %i[int float double],
-    char: %i[char]
-  }.freeze
+  SCALAR_TYPES = %i[int float double char].freeze
 
   TYPE_NAMES = {
     int: 'int', float: 'float', double: 'double', char: 'char', string: 'String', void: 'void'
   }.freeze
 
-  SCALAR_TYPES         = %i[int float double char].freeze
   COMPARISON_OPERATORS = %w[< > <= >= == !=].freeze
   LOGICAL_OPERATORS    = %w[&& ||].freeze
 
@@ -29,7 +22,6 @@ class SemanticAnalyzer
     @symbol_table = symbol_table
     @errors = []
     @scopes = [{}]
-    @function_returns = {}.compare_by_identity
     @current_function = nil
     @analyzed = false
   end
@@ -37,12 +29,7 @@ class SemanticAnalyzer
   def analyze
     return @errors if @analyzed
 
-    Array(@ast&.declarations).each do |node|
-      analyze_node(node)
-    rescue StandardError => error
-      @errors << SemanticError.new("Falha interna na análise semântica: #{error.message}", 1, 1, 1, nil, :internal)
-    end
-
+    Array(@ast&.declarations).each { |node| analyze_node(node) }
     @analyzed = true
     @errors
   end
@@ -71,7 +58,7 @@ class SemanticAnalyzer
     in IncDecNode[target:, operator_token:]
       analyze_inc_dec(target, operator_token)
     in BlockNode[statements:]
-      within_scope { statements.each { |statement| analyze_node(statement) } }
+      within_scope { statements.each { |stmt| analyze_node(stmt) } }
     in IfNode[keyword:, condition:, then_branch:, else_branch:]
       check_condition(keyword, condition)
       analyze_node(then_branch)
@@ -81,13 +68,13 @@ class SemanticAnalyzer
       analyze_node(body)
     in ForNode[keyword:, init:, condition:, update:, body:]
       within_scope do
-        init.each { |statement| analyze_node(statement) }
+        init.each { |stmt| analyze_node(stmt) }
         check_condition(keyword, condition)
         analyze_node(update)
         analyze_node(body)
       end
-    in FunctionDefNode
-      analyze_function(node)
+    in FunctionDefNode[return_type:, name_token:, params:, body:]
+      analyze_function(return_type, name_token, params, body)
     in ReturnNode[keyword:, expression:]
       analyze_return(keyword, expression)
     else
@@ -95,29 +82,30 @@ class SemanticAnalyzer
     end
   end
 
-  def analyze_declaration(type_token, name_token, expression)
-    if type_token.lexeme == 'void'
-      report(name_token, "Variável '#{name_token.lexeme}' não pode ser do tipo 'void'.", :invalid_type)
+  def analyze_declaration(type_token, name_token, expression, kind_label = 'Variável')
+    type = type_of(type_token)
+    if type == :void
+      report(name_token, "#{kind_label} '#{name_token.lexeme}' não pode ser do tipo 'void'.", :invalid_type)
       return
     end
 
     expression_type = infer_type(expression)
     return if declare(name_token, type_token.lexeme, 'Variável').nil?
 
-    check_compatibility(name_token, type_token.lexeme.to_sym, expression, expression_type)
+    check_compatibility(name_token, type, expression, expression_type)
   end
 
   def analyze_assignment(target, expression)
     entry = lookup_variable(target)
     expression_type = infer_type(expression)
-    check_compatibility(target, entry.type.to_sym, expression, expression_type) if entry
+    check_compatibility(target, type_of(entry), expression, expression_type) if entry
   end
 
   def analyze_inc_dec(target, operator_token)
     entry = lookup_variable(target)
     return if entry.nil?
 
-    type = entry.type.to_sym
+    type = type_of(entry)
     return if NUMERIC_RANK.key?(type)
 
     report(operator_token,
@@ -125,35 +113,26 @@ class SemanticAnalyzer
            :invalid_operation)
   end
 
-  # Parâmetros e corpo da função compartilham o mesmo escopo, como em C.
-  def analyze_function(node)
-    node => FunctionDefNode[return_type:, name_token:, params:, body:]
-    parameter_types = params.map { |param| param.type_token.lexeme }.join(', ')
-    entry = declare(name_token, "função #{return_type.lexeme}(#{parameter_types})", 'Função')
-    @function_returns[entry] = return_type.lexeme.to_sym if entry
+  # Parâmetros e corpo dividem o mesmo escopo, como em C.
+  def analyze_function(return_type, name_token, params, body)
+    param_types = params.map { |p| p.type_token.lexeme }.join(', ')
+    declare(name_token, "função #{return_type.lexeme}(#{param_types})", 'Função')
 
-    @current_function = node
+    @current_function = [name_token.lexeme, type_of(return_type)]
     within_scope do
-      params.each do |param|
-        if param.type_token.lexeme == 'void'
-          report(param.name_token, "Parâmetro '#{param.name_token.lexeme}' não pode ser do tipo 'void'.", :invalid_type)
-        else
-          analyze_node(param)
-        end
-      end
-      body.statements.each { |statement| analyze_node(statement) }
+      params.each { |p| analyze_declaration(p.type_token, p.name_token, nil, 'Parâmetro') }
+      body.statements.each { |stmt| analyze_node(stmt) }
     end
   ensure
     @current_function = nil
   end
 
   def analyze_return(keyword, expression)
+    # Infere o tipo antes de checar a função para ainda reportar variáveis não declaradas na expressão.
     expression_type = infer_type(expression)
     return report(keyword, "'return' utilizado fora de uma função.", :invalid_return) if @current_function.nil?
 
-    name = @current_function.name_token.lexeme
-    return_type = @current_function.return_type.lexeme.to_sym
-
+    name, return_type = @current_function
     if return_type == :void
       report_span(expression, keyword, "A função '#{name}' é void e não pode retornar um valor.", :invalid_return) if expression
       return
@@ -182,8 +161,7 @@ class SemanticAnalyzer
     @scopes.pop
   end
 
-  # Redeclaração só é erro dentro do mesmo escopo; em um bloco interno, o nome pode
-  # ser declarado de novo (sombreamento) e ganha uma nova linha na tabela de símbolos.
+  # Sombreamento em bloco interno é permitido e gera uma nova entrada na tabela de símbolos.
   def declare(name_token, type, noun)
     name = name_token.lexeme
     if (previous = @scopes.last[name])
@@ -223,12 +201,16 @@ class SemanticAnalyzer
       return nil
     end
 
-    if @function_returns.key?(entry)
+    if entry.type.start_with?('função ')
       report(token, "'#{token.lexeme}' é uma função e não pode ser usada como variável.", :invalid_operation)
       return nil
     end
 
     entry
+  end
+
+  def type_of(item)
+    (item.is_a?(SymbolEntry) ? item.type : item.lexeme).to_sym
   end
 
   def infer_type(expression)
@@ -242,7 +224,8 @@ class SemanticAnalyzer
     in CharNode
       :char
     in IdentifierNode[token:]
-      identifier_type(token)
+      entry = lookup_variable(token)
+      entry ? type_of(entry) : :error
     in UnaryOpNode[operator_token:, operand:]
       unary_type(operator_token, operand)
     in BinaryOpNode[left:, operator_token:, right:]
@@ -250,14 +233,6 @@ class SemanticAnalyzer
     else
       :error
     end
-  end
-
-  def identifier_type(token)
-    entry = lookup_variable(token)
-    return :error if entry.nil?
-
-    type = entry.type.to_sym
-    type == :void ? :error : type
   end
 
   def unary_type(operator_token, operand)
@@ -286,16 +261,11 @@ class SemanticAnalyzer
   end
 
   def arithmetic_type(operator_token, left_type, right_type)
-    operator = operator_token.lexeme
-
     unless NUMERIC_RANK.key?(left_type) && NUMERIC_RANK.key?(right_type)
-      report(operator_token,
-             "Operador '#{operator}' não pode ser aplicado a #{TYPE_NAMES[left_type]} e #{TYPE_NAMES[right_type]}.",
-             :invalid_operation)
-      return :error
+      return report_binary_error(operator_token, left_type, right_type)
     end
 
-    if operator == '%' && !(left_type == :int && right_type == :int)
+    if operator_token.lexeme == '%' && !(left_type == :int && right_type == :int)
       report(operator_token,
              "Operador '%' exige operandos inteiros (recebeu #{TYPE_NAMES[left_type]} e #{TYPE_NAMES[right_type]}).",
              :invalid_operation)
@@ -319,10 +289,13 @@ class SemanticAnalyzer
   def logical_type(operator_token, left_type, right_type)
     return :int if SCALAR_TYPES.include?(left_type) && SCALAR_TYPES.include?(right_type)
 
-    report(operator_token,
-           "Operador '#{operator_token.lexeme}' não pode ser aplicado a " \
-           "#{TYPE_NAMES[left_type]} e #{TYPE_NAMES[right_type]}.",
-           :invalid_operation)
+    report_binary_error(operator_token, left_type, right_type)
+  end
+
+  def report_binary_error(operator_token, left_type, right_type)
+    msg = "Operador '#{operator_token.lexeme}' não pode ser aplicado a " \
+          "#{TYPE_NAMES[left_type]} e #{TYPE_NAMES[right_type]}."
+    report(operator_token, msg, :invalid_operation)
     :error
   end
 
@@ -335,10 +308,11 @@ class SemanticAnalyzer
   end
 
   def compatible?(target_type, expression_type)
-    return true if expression_type.nil? || expression_type == :error
+    return true if expression_type.nil? || expression_type == :error || target_type == expression_type
 
-    allowed_types = ASSIGNABLE_FROM[target_type]
-    allowed_types.nil? || allowed_types.include?(expression_type)
+    target_rank = NUMERIC_RANK[target_type]
+    expr_rank = NUMERIC_RANK[expression_type]
+    !target_rank.nil? && !expr_rank.nil? && expr_rank <= target_rank
   end
 
   def precision_note(target_type, expression_type)
@@ -346,22 +320,13 @@ class SemanticAnalyzer
   end
 
   def report_span(expression, fallback_token, message, kind)
-    first_token, length = expression_span(expression, fallback_token)
-    report(first_token, message, kind, length)
-  end
-
-  def expression_span(expression, fallback_token)
     tokens = collect_tokens(expression)
-    return [fallback_token, fallback_token.lexeme.length] if tokens.empty?
+    return report(fallback_token, message, kind) if tokens.empty?
 
-    first_token = tokens.min_by { |token| [token.line, token.column] }
-    last_token = tokens.max_by { |token| [token.line, token.column] }
-    length = if first_token.line == last_token.line
-               last_token.column + last_token.lexeme.length - first_token.column
-             else
-               first_token.lexeme.length
-             end
-    [first_token, length]
+    first = tokens.first
+    last = tokens.last
+    length = first.line == last.line ? last.column + last.lexeme.length - first.column : first.lexeme.length
+    report(first, message, kind, length)
   end
 
   def collect_tokens(expression)
