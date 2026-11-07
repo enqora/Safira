@@ -20,20 +20,14 @@ ForNode         = Data.define(:keyword, :init, :condition, :update, :body)
 ReturnNode      = Data.define(:keyword, :expression)
 
 ParseError = Struct.new(:message, :line, :column, :token) do
-  def lexeme
-    token&.lexeme
-  end
-
-  def to_s
-    "[Linha #{line}, Col #{column}] Erro Sintático: #{message}"
-  end
+  def lexeme = token&.lexeme
+  def to_s = "[Linha #{line}, Col #{column}] Erro Sintático: #{message}"
 end
 
 class Parser
   class SyntaxAbort < StandardError; end
   private_constant :SyntaxAbort
 
-  # Tokens que iniciam (ou fecham) uma construção: pontos seguros para retomar a análise.
   SYNC_TOKENS = %i[TIPO_DADO KW_IF KW_ELSE KW_WHILE KW_FOR KW_RETURN CHAVE_ESQ CHAVE_DIR].freeze
   PAREN_DELTA = { PARENTESE_ESQ: 1, PARENTESE_DIR: -1 }.freeze
   COMPOUND_ASSIGNMENTS = {
@@ -54,18 +48,16 @@ class Parser
   end
 
   def peek = @tokens[@pos]
-
-  def previous = @pos.positive? ? @tokens[@pos - 1] : @tokens[0]
-
+  def peek_next = @tokens[@pos + 1]
+  def previous = @tokens[@pos - 1]
   def at_end? = peek.type == :EOF
+  def check?(type) = peek.type == type
 
   def advance
     token = peek
     @pos += 1 unless at_end?
     token
   end
-
-  def check?(type) = peek.type == type
 
   def match?(*types)
     return false unless types.any? { |type| check?(type) }
@@ -90,17 +82,12 @@ class Parser
     @ast = ProgramNode.new(declarations: declarations)
   end
 
-  alias ast parse
-
   def errors
-    parse unless @parsed
+    parse
     @errors
   end
 
-  def valid?
-    parse unless @parsed
-    @errors.empty?
-  end
+  def valid? = errors.empty?
 
   private
 
@@ -108,10 +95,6 @@ class Parser
     start_pos = @pos
     parse_statement
   rescue SyntaxAbort
-    synchronize(start_pos)
-    nil
-  rescue StandardError => error
-    record_error(peek, "Erro sintático inesperado: #{error.message}")
     synchronize(start_pos)
     nil
   end
@@ -142,29 +125,28 @@ class Parser
 
   def parse_declaration
     type_token = advance
-    name_token = consume(:IDENTIFICADOR, "Esperado identificador após o tipo '#{type_token.lexeme}'")
-    return parse_function(type_token, name_token) if check?(:PARENTESE_ESQ)
+    return parse_function(type_token) if check?(:IDENTIFICADOR) && peek_next.type == :PARENTESE_ESQ
 
-    declarations = parse_declarators(type_token, name_token)
+    declarations = parse_declarators(type_token)
     consume_or_insert(:PONTO_VIRGULA, "Esperado ';' após a declaração de '#{declarations.last.name_token.lexeme}'")
     declarations.size == 1 ? declarations.first : declarations
   end
 
-  def parse_declarators(type_token, name_token)
+  def parse_declarators(type_token = advance)
     declarations = []
 
     loop do
+      name_token = consume(:IDENTIFICADOR, "Esperado identificador após o tipo '#{type_token.lexeme}'")
       expression = match?(:OP_ATRIB) ? parse_expression : nil
       declarations << VarDeclNode.new(type_token: type_token, name_token: name_token, expression: expression)
       break unless match?(:VIRGULA)
-
-      name_token = consume(:IDENTIFICADOR, "Esperado identificador após o tipo '#{type_token.lexeme}'")
     end
 
     declarations
   end
 
-  def parse_function(return_type, name_token)
+  def parse_function(return_type)
+    name_token = advance
     if @block_depth.positive?
       raise_syntax_error(name_token, "A função '#{name_token.lexeme}' só pode ser definida fora de blocos")
     end
@@ -180,7 +162,7 @@ class Parser
   def parse_parameters
     return [] if check?(:PARENTESE_DIR)
 
-    if peek.lexeme == 'void' && @tokens[@pos + 1].type == :PARENTESE_DIR
+    if peek.lexeme == 'void' && peek_next.type == :PARENTESE_DIR
       advance
       return []
     end
@@ -201,7 +183,6 @@ class Parser
     statement
   end
 
-  # Atribuição ou incremento sem o ';' final, reaproveitada no cabeçalho do 'for'.
   def parse_simple_assignment(context)
     if match?(:OP_INC, :OP_DEC)
       operator_token = previous
@@ -217,7 +198,7 @@ class Parser
       operator_type = COMPOUND_ASSIGNMENTS[compound_operator.type]
       operator_token = Token.new(operator_type, compound_operator.lexeme[0],
                                  compound_operator.line, compound_operator.column)
-      # Para alvos simples: i += expressão equivale a i = i + (expressão).
+      # Desaçucara 'i op= expr' em 'i = i op (expr)'.
       expression = BinaryOpNode.new(left: IdentifierNode.new(token: target),
                                     operator_token: operator_token, right: parse_expression)
       return AssignNode.new(target: target, expression: expression)
@@ -230,11 +211,8 @@ class Parser
   def describe_simple_statement(statement)
     case statement
     in IncDecNode[target:, operator_token:]
-      if operator_token.line < target.line || (operator_token.line == target.line && operator_token.column < target.column)
-        "'#{operator_token.lexeme}#{target.lexeme}'"
-      else
-        "'#{target.lexeme}#{operator_token.lexeme}'"
-      end
+      prefix = ([operator_token.line, operator_token.column] <=> [target.line, target.column]).negative?
+      prefix ? "'#{operator_token.lexeme}#{target.lexeme}'" : "'#{target.lexeme}#{operator_token.lexeme}'"
     in AssignNode[target:]
       "a atribuição para '#{target.lexeme}'"
     end
@@ -286,39 +264,33 @@ class Parser
 
   def parse_for_init
     return [] if check?(:PONTO_VIRGULA)
-
-    if check?(:TIPO_DADO)
-      type_token = advance
-      name_token = consume(:IDENTIFICADOR, "Esperado identificador após o tipo '#{type_token.lexeme}'")
-      return parse_declarators(type_token, name_token)
-    end
+    return parse_declarators if check?(:TIPO_DADO)
 
     [parse_simple_assignment("na inicialização do 'for'")]
   end
 
   def parse_return
     keyword = advance
-    expression = (check?(:PONTO_VIRGULA) || check?(:CHAVE_DIR)) ? nil : parse_expression
+    expression = check?(:PONTO_VIRGULA) || check?(:CHAVE_DIR) ? nil : parse_expression
     consume_or_insert(:PONTO_VIRGULA, "Esperado ';' após o 'return'")
     ReturnNode.new(keyword: keyword, expression: expression)
   end
 
-  # Condição entre parênteses do 'if'/'while'. Sem o '(' inicial, a condição é lida
-  # mesmo assim e só um erro é registrado, para que o resto do comando continue válido.
+  # Sem '(', registra o erro mas ainda lê a condição para aproveitar o resto do comando.
   def parse_condition(keyword)
-    unless match?(:PARENTESE_ESQ)
-      record_error(peek, "A condição do '#{keyword.lexeme}' deve estar entre parênteses")
-      condition = parse_expression
-      match?(:PARENTESE_DIR)
-      return condition
-    end
+    opened = match?(:PARENTESE_ESQ)
+    record_error(peek, "A condição do '#{keyword.lexeme}' deve estar entre parênteses") unless opened
 
     condition = parse_expression
-    consume_or_insert(:PARENTESE_DIR, "Esperado ')' para fechar a condição do '#{keyword.lexeme}'")
+    if opened
+      consume_or_insert(:PARENTESE_DIR, "Esperado ')' para fechar a condição do '#{keyword.lexeme}'")
+    else
+      match?(:PARENTESE_DIR)
+    end
     condition
   end
 
-  # Corpo de if/while/for: um comando ou um bloco. Uma declaração múltipla vira bloco.
+  # Declaração múltipla sem chaves (ex.: corpo de 'if') vira um BlockNode.
   def parse_body
     statement = parse_statement_with_recovery
     statement.is_a?(Array) ? BlockNode.new(statements: statement) : statement
@@ -337,21 +309,33 @@ class Parser
   end
 
   # Precedência, da mais fraca para a mais forte: || → && → == != → < > <= >= → + - → * / % → unário
-  def parse_expression = parse_logical_or
+  def parse_expression
+    parse_logical_or
+  end
 
-  def parse_logical_or = parse_left_associative(:OP_OU_LOGICO) { parse_logical_and }
+  def parse_logical_or
+    parse_left_associative(:OP_OU_LOGICO) { parse_logical_and }
+  end
 
-  def parse_logical_and = parse_left_associative(:OP_E_LOGICO) { parse_equality }
+  def parse_logical_and
+    parse_left_associative(:OP_E_LOGICO) { parse_equality }
+  end
 
-  def parse_equality = parse_left_associative(:OP_IGUAL, :OP_DIFERENTE) { parse_relational }
+  def parse_equality
+    parse_left_associative(:OP_IGUAL, :OP_DIFERENTE) { parse_relational }
+  end
 
   def parse_relational
     parse_left_associative(:OP_MENOR, :OP_MAIOR, :OP_MENOR_IGUAL, :OP_MAIOR_IGUAL) { parse_additive }
   end
 
-  def parse_additive = parse_left_associative(:OP_SOMA, :OP_SUB) { parse_term }
+  def parse_additive
+    parse_left_associative(:OP_SOMA, :OP_SUB) { parse_term }
+  end
 
-  def parse_term = parse_left_associative(:OP_MULT, :OP_DIV, :OP_MOD) { parse_unary }
+  def parse_term
+    parse_left_associative(:OP_MULT, :OP_DIV, :OP_MOD) { parse_unary }
+  end
 
   def parse_left_associative(*operators)
     node = yield
@@ -388,9 +372,7 @@ class Parser
     raise_syntax_error(peek, "Expressão esperada, mas foi encontrado #{describe(peek)}")
   end
 
-  # Recuperação por inserção: se o símbolo esperado falta, mas o próximo token começa
-  # outra construção (nova linha, comando, chave ou fim do arquivo), o erro é apontado
-  # logo após o último token e a análise segue como se o símbolo estivesse lá.
+  # Se o token esperado falta mas o próximo já inicia outra construção, aponta o erro sem abortar.
   def consume_or_insert(type, message)
     return advance if check?(type)
     raise_syntax_error(peek, message) unless resumable_after_missing?
@@ -407,9 +389,7 @@ class Parser
       SYNC_TOKENS.include?(peek.type)
   end
 
-  def describe(token)
-    token.type == :EOF ? 'fim do arquivo' : "'#{token.lexeme}'"
-  end
+  def describe(token) = token.type == :EOF ? 'fim do arquivo' : "'#{token.lexeme}'"
 
   def raise_syntax_error(token, message)
     record_error(token, message)
@@ -420,9 +400,7 @@ class Parser
     @errors << ParseError.new(message, token.line, token.column, token)
   end
 
-  # Modo pânico: descarta tokens até um ponto seguro. Um ';' dentro de parênteses
-  # (cabeçalho do 'for') não encerra o comando, e um '}' nunca é consumido aqui,
-  # pois pertence ao bloco que está sendo analisado.
+  # Descarta tokens até ';' (fora de parênteses) ou início de comando/bloco, sem consumir '}'.
   def synchronize(start_pos)
     advance if @pos == start_pos && !at_end? && !(check?(:CHAVE_DIR) && @block_depth.positive?)
     depth = @tokens[start_pos...@pos].sum { |token| PAREN_DELTA.fetch(token.type, 0) }
