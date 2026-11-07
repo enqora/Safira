@@ -52,6 +52,7 @@ module SafiraCLI
         \    /
          \  /
           \/
+          
     ART
     GEM_WIDTH = GEM.map(&:length).max
 
