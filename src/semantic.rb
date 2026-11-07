@@ -343,6 +343,9 @@ class SemanticAnalyzer
   end
 
   def report(token, message, kind, length = nil)
+    # 'y += 1' vira 'y = y + 1' com o mesmo token dos dois lados; não repete o erro.
+    return if @errors.any? { |e| e.line == token.line && e.column == token.column && e.kind == kind }
+
     @errors << SemanticError.new(message, token.line, token.column, length || token.lexeme.to_s.length, token, kind)
   end
 end
