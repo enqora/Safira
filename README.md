@@ -1,4 +1,4 @@
-# Safira
+# S✧fira
 
 Compilador didático desenvolvido em Ruby puro para um subconjunto da linguagem C. Projeto da disciplina de Compiladores (2026.2).
 
