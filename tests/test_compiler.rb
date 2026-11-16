@@ -46,6 +46,7 @@ assert(out1.include?('[2] TABELA DE SÍMBOLOS'), 'Exibe seção [2] Tabela de S�
 assert(out1.include?('[3] ANÁLISE SINTÁTICA: ÁRVORE SINTÁTICA (AST)'), 'Exibe seção [3] Árvore Sintática (AST)')
 assert(out1.include?('[4] ANÁLISE SEMÂNTICA'), 'Exibe seção [4] Análise Semântica')
 assert(out1.include?('| total         | float   |'), 'Tabela de símbolos exibe tipos preenchidos pela semântica')
+assert(out1.include?(" Programa\n") && out1.include?('├── Tipo (int)'), 'AST usa raiz Programa e rótulo padronizado Tipo')
 assert(out1.include?('├── ID (x)') && out1.include?('└── Expressao (+)'), 'AST usa conectores Unicode hierárquicos')
 assert(out1.include?('✔ Nenhuma inconsistência semântica encontrada.'), 'Exibe mensagem de sucesso semântico')
 
@@ -85,6 +86,8 @@ assert(out_sym.include?('[2] TABELA DE SÍMBOLOS') && out_sym.include?('| float 
 _, out_ast, = run_cli(valid_path, '--ast')
 assert(out_ast.include?('[3] ANÁLISE SINTÁTICA') && !out_ast.include?('[1]') && !out_ast.include?('[4]'),
        '--ast exibe apenas a seção [3]')
+assert(!out_ast.include?('OP_ATRIB (=)') && !out_ast.include?('TIPO_DADO'),
+       'AST não expõe tokens OP_ATRIB ou TIPO_DADO brutos')
 
 _, out_sem, = run_cli(valid_path, '--semantic')
 assert(out_sem.include?('[4] ANÁLISE SEMÂNTICA') && !out_sem.include?('[1]') && !out_sem.include?('[3]'),
@@ -124,6 +127,23 @@ Tempfile.create(['cascade', '.c']) do |tmp|
          'Exibe aviso claro de que a semântica não foi executada')
   assert(!out_casc.include?('[ERRO SEMÂNTICO]'),
          'Não emite falsos positivos de "variável não declarada" para linhas 2 e 3')
+end
+
+# [7] Diretivas não impedem a análise semântica
+puts "\n#{YELLOW}[7] Diretivas de Pré-processador#{RESET}"
+directives_path = File.expand_path('../samples/diretivas.c', __dir__)
+code_directives, out_directives, err_directives = run_cli(directives_path)
+assert(code_directives.zero? && err_directives.empty?, 'Sample com diretivas passa pelo compilador')
+assert(out_directives.include?('Nenhuma inconsistência semântica encontrada.'),
+       'Análise semântica é executada após ignorar diretivas')
+Tempfile.create(['directives', '.c']) do |tmp|
+  tmp.write("#include <stdio.h>\nint main() {\n    int valor = ausente;\n    return 0;\n}\n")
+  tmp.flush
+  code_error, out_error, = run_cli(tmp.path)
+  assert(code_error == 1 && out_error.include?('[ERRO SEMÂNTICO]') && out_error.include?('ausente'),
+         'Erro semântico real após diretiva continua sendo detectado')
+  assert(!out_error.include?('[ERRO LÉXICO]') && !out_error.include?('[ERRO SINTÁTICO]'),
+         'Diretiva não produz erros nas etapas anteriores')
 end
 
 puts
