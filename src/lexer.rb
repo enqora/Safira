@@ -23,7 +23,8 @@ class Lexer
     'else' => :KW_ELSE,
     'while' => :KW_WHILE,
     'for' => :KW_FOR,
-    'return' => :KW_RETURN
+    'return' => :KW_RETURN,
+    'printf' => :KW_PRINTF
   }.freeze
 
   SINGLE_CHAR_TOKENS = {

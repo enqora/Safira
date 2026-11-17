@@ -12,6 +12,7 @@ O programa lê um arquivo de código C e executa as três etapas principais dire
 - Expressões aritméticas, relacionais e lógicas com precedência de operadores.
 - Estruturas de controle de fluxo: `if`, `else`, `while` e `for`.
 - Definição de funções com parâmetros e comando `return`.
+- Comando de saída `printf` com validação de formato e argumentos.
 - Descarte de comentários (`//` e `/* */`) e diretivas de pré-processador (`#include`, `#define`).
 
 ## Requisitos
@@ -58,6 +59,7 @@ ruby tests/test_semantic.rb
 ruby tests/test_compiler.rb
 ruby tests/test_control.rb
 ruby tests/test_semicolon.rb
+ruby tests/test_printf.rb
 ```
 
 ## Autores

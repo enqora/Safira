@@ -271,6 +271,8 @@ module SafiraCLI
         ["Repeticao (#{keyword.lexeme})", children]
       in ReturnNode[keyword:, expression:]
         ["Retorno (#{keyword.lexeme})", expression.nil? ? [] : [ast_to_tree(expression)]]
+      in PrintfNode[keyword:, arguments:]
+        ["Saida (#{keyword.lexeme})", arguments.map { |arg| ast_to_tree(arg) }]
       in BinaryOpNode[left:, operator_token:, right:]
         ["Expressao (#{operator_token.lexeme})", [
           ast_to_tree(left),

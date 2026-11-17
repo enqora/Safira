@@ -18,6 +18,7 @@ IfNode          = Data.define(:keyword, :condition, :then_branch, :else_branch)
 WhileNode       = Data.define(:keyword, :condition, :body)
 ForNode         = Data.define(:keyword, :init, :condition, :update, :body)
 ReturnNode      = Data.define(:keyword, :expression)
+PrintfNode      = Data.define(:keyword, :arguments)
 
 ParseError = Struct.new(:message, :line, :column, :token) do
   def lexeme = token&.lexeme
@@ -28,7 +29,7 @@ class Parser
   class SyntaxAbort < StandardError; end
   private_constant :SyntaxAbort
 
-  SYNC_TOKENS = %i[TIPO_DADO KW_IF KW_ELSE KW_WHILE KW_FOR KW_RETURN CHAVE_ESQ CHAVE_DIR].freeze
+  SYNC_TOKENS = %i[TIPO_DADO KW_IF KW_ELSE KW_WHILE KW_FOR KW_RETURN KW_PRINTF CHAVE_ESQ CHAVE_DIR].freeze
   PAREN_DELTA = { PARENTESE_ESQ: 1, PARENTESE_DIR: -1 }.freeze
   COMPOUND_ASSIGNMENTS = {
     OP_SOMA_ATRIB: :OP_SOMA,
@@ -112,6 +113,7 @@ class Parser
     when :KW_WHILE then parse_while
     when :KW_FOR then parse_for
     when :KW_RETURN then parse_return
+    when :KW_PRINTF then parse_printf
     when :CHAVE_ESQ then parse_block
     when :KW_ELSE
       record_error(advance, "'else' sem um 'if' correspondente")
@@ -277,6 +279,19 @@ class Parser
     expression = check?(:PONTO_VIRGULA) || check?(:CHAVE_DIR) ? nil : parse_expression
     consume_or_insert(:PONTO_VIRGULA, "Esperado ';' após o 'return'")
     ReturnNode.new(keyword: keyword, expression: expression)
+  end
+
+  def parse_printf
+    keyword = advance
+    consume(:PARENTESE_ESQ, "Esperado '(' após 'printf'")
+    raise_syntax_error(peek, "Esperado ao menos um argumento em 'printf'") if check?(:PARENTESE_DIR)
+
+    arguments = [parse_expression]
+    arguments << parse_expression while match?(:VIRGULA)
+
+    closed = consume_or_insert(:PARENTESE_DIR, "Esperado ')' para fechar 'printf'")
+    consume_or_insert(:PONTO_VIRGULA, "Esperado ';' após o 'printf'") if closed || check?(:PONTO_VIRGULA)
+    PrintfNode.new(keyword: keyword, arguments: arguments)
   end
 
   # Sem '(', registra o erro mas ainda lê a condição para aproveitar o resto do comando.
