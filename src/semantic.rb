@@ -15,6 +15,19 @@ class SemanticAnalyzer
   COMPARISON_OPERATORS = %w[< > <= >= == !=].freeze
   LOGICAL_OPERATORS    = %w[&& ||].freeze
 
+  PRINTF_SPECIFIER = /%%|%[-+ #0]*(\d+|\*)?(?:\.(\d+|\*))?(?:hh|h|ll|l|L|z|j|t)?([diuoxXfFeEgGaAcs])/
+
+  PRINTF_SPECIFIER_TYPES = {
+    'd' => %i[int], 'i' => %i[int], 'u' => %i[int],
+    'o' => %i[int], 'x' => %i[int], 'X' => %i[int],
+    'f' => %i[float double], 'F' => %i[float double],
+    'e' => %i[float double], 'E' => %i[float double],
+    'g' => %i[float double], 'G' => %i[float double],
+    'a' => %i[float double], 'A' => %i[float double],
+    'c' => %i[char],
+    's' => %i[string]
+  }.freeze
+
   def initialize(ast, symbol_table = [])
     @ast = ast
     @symbol_table = symbol_table
@@ -69,6 +82,8 @@ class SemanticAnalyzer
       analyze_function(return_type, name_token, params, body)
     in ReturnNode[keyword:, expression:]
       analyze_return(keyword, expression)
+    in PrintfNode[keyword:, arguments:]
+      analyze_printf(keyword, arguments)
     else
       nil
     end
@@ -144,6 +159,59 @@ class SemanticAnalyzer
     message = "Não é possível retornar #{TYPE_NAMES[expression_type]} na função '#{name}' " \
               "(#{TYPE_NAMES[return_type]}).#{precision_note(return_type, expression_type)}"
     report_span(expression, keyword, message, :type_mismatch)
+  end
+
+  def analyze_printf(keyword, arguments)
+    arg_types = arguments.map { |arg| infer_type(arg) }
+    format_arg = arguments.first
+    format_type = arg_types.first
+    return if format_type.nil? || format_type == :error
+
+    unless format_type == :string
+      message = "O primeiro argumento de 'printf' deve ser String, mas recebeu #{TYPE_NAMES[format_type]}."
+      return report_span(format_arg, keyword, message, :type_mismatch)
+    end
+
+    validate_printf_arguments(format_arg, arguments.drop(1), arg_types.drop(1))
+  end
+
+  def validate_printf_arguments(format_arg, extra_args, extra_types)
+    return unless format_arg.is_a?(StringNode)
+
+    specs = parse_printf_specifiers(format_arg.token.lexeme)
+    specs.zip(extra_args, extra_types).each do |(spec_label, expected_types), arg, arg_type|
+      break if arg.nil?
+      next if arg_type == :error || expected_types.include?(arg_type)
+
+      expected = expected_types.map { |t| TYPE_NAMES[t] }.join(' ou ')
+      message = "Especificador '#{spec_label}' de 'printf' espera #{expected}, " \
+                "mas recebeu #{TYPE_NAMES[arg_type]}."
+      report_span(arg, format_arg.token, message, :type_mismatch)
+    end
+    check_printf_arity(format_arg, specs.size, extra_args)
+  end
+
+  def check_printf_arity(format_arg, expected_count, extra_args)
+    return if extra_args.size == expected_count
+
+    detail = extra_args.size < expected_count ? 'insuficiente' : 'excessiva'
+    target = extra_args.size > expected_count ? extra_args[expected_count] : format_arg
+    message = "Quantidade #{detail} de argumentos para 'printf' " \
+              "(esperado #{expected_count}, recebido #{extra_args.size})."
+    report_span(target, format_arg.token, message, :invalid_operation)
+  end
+
+  def parse_printf_specifiers(lexeme)
+    specs = []
+    lexeme[1...-1].scan(PRINTF_SPECIFIER) do
+      match = Regexp.last_match
+      next if match[3].nil?
+
+      specs << ['*', %i[int]] if match[1] == '*'
+      specs << ['.*', %i[int]] if match[2] == '*'
+      specs << [match[0], PRINTF_SPECIFIER_TYPES[match[3]]]
+    end
+    specs
   end
 
   def check_condition(keyword, condition)
